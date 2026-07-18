@@ -12,5 +12,5 @@ This is a Laravel application integrated with Inertia.js and Vue 3 for an Accoun
 - **Database/Seeders:** DatabaseSeeder, stores migration, JournalEntry and Account models are used.
 
 ## Git Configuration
-- **Remote URL:** `git@github.com:Eng-Ma/rentisy.git`
+- **Remote URL:** `https://github.com/Eng-Ma/rentisy.git`
 - **Initial State:** Non-git repository, needs initialization.

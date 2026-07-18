@@ -4,7 +4,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import { watchDebounced } from '@vueuse/core';
-import Pagination from '@/Components/Pagination.vue';
+import Pagination from '@/components/Pagination.vue';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'جهات التعامل', href: '/parties' },

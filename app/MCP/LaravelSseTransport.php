@@ -45,15 +45,18 @@ class LaravelSseTransport extends BaseTransport
             $sessionId = Uuid::v4()->toRfc4122();
             
             $callback = function () use ($sessionId) {
-                // Release the session lock to prevent hanging other requests from the same user
+                // Disable output buffering so SSE events flush immediately
+                while (ob_get_level() > 0) {
+                    @ob_end_clean();
+                }
+                // Release session lock to prevent blocking concurrent FPM requests
                 session_write_close();
                 
                 // Make endpoint absolute to satisfy strict clients
                 $endpoint = url('/mcp/messages?sessionId=' . $sessionId);
                 echo "event: endpoint\n";
                 echo "data: {$endpoint}\n\n";
-                ob_flush();
-                flush();
+                @flush();
                 
                 $lastPing = time();
                 $lastIndex = 0;
@@ -67,8 +70,7 @@ class LaravelSseTransport extends BaseTransport
                     for ($i = $lastIndex; $i < count($messages); $i++) {
                         echo "event: message\n";
                         echo "data: {$messages[$i]}\n\n";
-                        ob_flush();
-                        flush();
+                        @flush();
                     }
                     $lastIndex = count($messages);
                     
@@ -76,8 +78,7 @@ class LaravelSseTransport extends BaseTransport
                     // This forces connection_aborted() to update and frees the FPM worker immediately.
                     if (time() - $lastPing >= 1) {
                         echo ": keepalive\n\n";
-                        ob_flush();
-                        flush();
+                        @flush();
                         $lastPing = time();
                     }
                     
@@ -94,9 +95,10 @@ class LaravelSseTransport extends BaseTransport
             
             return response()->stream($callback, 200, [
                 'Content-Type' => 'text/event-stream',
-                'Cache-Control' => 'no-cache',
+                'Cache-Control' => 'no-cache, no-transform',
                 'Connection' => 'keep-alive',
                 'X-Accel-Buffering' => 'no',
+                'Content-Encoding' => 'none',
                 'Access-Control-Allow-Origin' => '*',
             ]);
         }

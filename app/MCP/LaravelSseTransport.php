@@ -128,10 +128,10 @@ class LaravelSseTransport extends BaseTransport
                     ($this->messageListener)($this, $body, null);
                 }
                 
-                // The SDK generated a new session ID and saved it in $this->sessionId.
-                // We must map the client's session ID to this internal session ID.
-                if ($this->sessionId && $clientSessionIdStr) {
-                    \Illuminate\Support\Facades\Cache::store('file')->put('mcp_session_map_' . $clientSessionIdStr, $this->sessionId->toRfc4122(), 3600);
+                $internalSessionId = $this->sessionId;
+                
+                if ($internalSessionId && $clientSessionIdStr) {
+                    \Illuminate\Support\Facades\Cache::store('file')->put('mcp_session_map_' . $clientSessionIdStr, $internalSessionId->toRfc4122(), 3600);
                 }
             } else {
                 // For subsequent requests, lookup the internal session ID
@@ -143,8 +143,22 @@ class LaravelSseTransport extends BaseTransport
                 }
             }
             
-            if ($this->latestMessage !== null) {
-                return response($this->latestMessage, 200)
+            // Fetch messages queued by the SDK protocol
+            $outgoing = $this->getOutgoingMessages($internalSessionId);
+            $lastMsg = $this->latestMessage; // Catch immediate errors sent via send()
+            
+            foreach ($outgoing as $msg) {
+                $lastMsg = $msg['message'];
+                if ($clientSessionIdStr) {
+                    $cacheKey = 'mcp_messages_' . $clientSessionIdStr;
+                    $messages = \Illuminate\Support\Facades\Cache::store('file')->get($cacheKey, []);
+                    $messages[] = $msg['message'];
+                    \Illuminate\Support\Facades\Cache::store('file')->put($cacheKey, $messages, 3600);
+                }
+            }
+            
+            if (empty($clientSessionIdStr) && $lastMsg !== null) {
+                return response($lastMsg, 200)
                     ->header('Content-Type', 'application/json')
                     ->header('Access-Control-Allow-Origin', $origin)
                     ->header('Access-Control-Allow-Credentials', 'true');

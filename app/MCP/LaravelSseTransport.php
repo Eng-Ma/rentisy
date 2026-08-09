@@ -34,6 +34,9 @@ class LaravelSseTransport extends BaseTransport
             $sessionId = Uuid::v4()->toRfc4122();
             
             $callback = function () use ($sessionId) {
+                // Release the session lock to prevent hanging other requests from the same user
+                session_write_close();
+                
                 // Make endpoint absolute to satisfy strict clients
                 $endpoint = url('/mcp/messages?sessionId=' . $sessionId);
                 echo "event: endpoint\n";
@@ -47,6 +50,11 @@ class LaravelSseTransport extends BaseTransport
                     echo ": keepalive\n\n";
                     ob_flush();
                     flush();
+                    
+                    // Prevent PHP-FPM zombie processes by exiting if client disconnected
+                    if (connection_aborted()) {
+                        break;
+                    }
                 }
             };
             

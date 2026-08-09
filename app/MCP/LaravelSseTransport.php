@@ -98,9 +98,12 @@ class LaravelSseTransport extends BaseTransport
             ]);
         }
 
+        $origin = $this->request->getHeaderLine('Origin') ?: '*';
+
         if ($method === 'OPTIONS') {
             return response('', 204)
-                ->header('Access-Control-Allow-Origin', '*')
+                ->header('Access-Control-Allow-Origin', $origin)
+                ->header('Access-Control-Allow-Credentials', 'true')
                 ->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
                 ->header('Access-Control-Allow-Headers', '*');
         }
@@ -137,7 +140,9 @@ class LaravelSseTransport extends BaseTransport
                 }
             }
             
-            return response()->json(['status' => 'accepted'], 202)->header('Access-Control-Allow-Origin', '*');
+            return response()->json(['status' => 'accepted'], 202)
+                ->header('Access-Control-Allow-Origin', $origin)
+                ->header('Access-Control-Allow-Credentials', 'true');
         }
         
         return response()->json(['error' => 'Method Not Allowed'], 405);

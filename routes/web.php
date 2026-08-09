@@ -42,3 +42,29 @@ require __DIR__.'/auth.php';
 // MCP Server Routes
 Route::get('/mcp/sse', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.sse');
 Route::post('/mcp/messages', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.messages');
+
+// Dummy OAuth routes to satisfy Claude Web / Custom Actions MCP registration
+Route::get('/.well-known/oauth-authorization-server', function () {
+    return response()->json([
+        'issuer' => url('/'),
+        'authorization_endpoint' => url('/oauth/authorize'),
+        'token_endpoint' => url('/oauth/token'),
+        'response_types_supported' => ['code'],
+        'grant_types_supported' => ['authorization_code'],
+    ]);
+});
+
+Route::get('/oauth/authorize', function (\Illuminate\Http\Request $request) {
+    $redirectUri = $request->query('redirect_uri');
+    $state = $request->query('state');
+    // Instantly redirect back with a dummy code
+    return redirect()->away($redirectUri . '?code=dummy_mcp_code&state=' . urlencode($state));
+});
+
+Route::post('/oauth/token', function () {
+    return response()->json([
+        'access_token' => 'dummy_mcp_access_token',
+        'token_type' => 'Bearer',
+        'expires_in' => 31536000,
+    ]);
+});

@@ -12,6 +12,10 @@ use Symfony\Component\Uid\Uuid;
 class LaravelSseTransport extends BaseTransport
 {
     private ServerRequestInterface $request;
+    private ?Uuid $sessionId = null;
+    /** @var callable|null */
+    private $messageListener;
+    private ?string $latestMessage = null;
 
     public function __construct(ServerRequestInterface $request)
     {
@@ -21,6 +25,7 @@ class LaravelSseTransport extends BaseTransport
 
     public function send(string $data, array $context): void
     {
+        $this->latestMessage = $data;
         // In PHP-FPM, POST requests and GET (SSE) requests run in different processes.
         // We MUST use Cache to pass the JSON-RPC response from the POST worker to the SSE worker!
         $queryParams = $this->request->getQueryParams();
@@ -139,6 +144,13 @@ class LaravelSseTransport extends BaseTransport
                 if (is_callable($this->messageListener)) {
                     ($this->messageListener)($this, $body, $internalSessionId);
                 }
+            }
+            
+            if ($this->latestMessage !== null) {
+                return response($this->latestMessage, 200)
+                    ->header('Content-Type', 'application/json')
+                    ->header('Access-Control-Allow-Origin', $origin)
+                    ->header('Access-Control-Allow-Credentials', 'true');
             }
             
             return response()->json(['status' => 'accepted'], 202)

@@ -34,11 +34,8 @@ class McpController extends Controller
 
         $transport = $this->configureTransport($psrRequest);
 
-        // Connect the server to our transport
-        $server->connect($transport);
-
-        // The transport listens and handles the request (SSE GET or Message POST)
-        $psrResponse = $transport->listen();
+        // Run the server on the transport which listens and handles the request
+        $psrResponse = $server->run($transport);
 
         // Convert PSR-7 Response back to Laravel (Symfony) Response
         $httpFoundationFactory = new HttpFoundationFactory();

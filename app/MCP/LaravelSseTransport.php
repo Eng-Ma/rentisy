@@ -22,8 +22,18 @@ class LaravelSseTransport extends BaseTransport
 
     public function send(string $data, array $context): void
     {
-        // The Protocol calls send() when a response is ready.
-        $this->immediateResponse = $data;
+        // In PHP-FPM, POST requests and GET (SSE) requests run in different processes.
+        // We MUST use Cache to pass the JSON-RPC response from the POST worker to the SSE worker!
+        $queryParams = $this->request->getQueryParams();
+        $clientSessionIdStr = $queryParams['sessionId'] ?? '';
+        
+        if ($clientSessionIdStr) {
+            $cacheKey = 'mcp_messages_' . $clientSessionIdStr;
+            // Append the new message to the queue
+            $messages = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+            $messages[] = $data;
+            \Illuminate\Support\Facades\Cache::put($cacheKey, $messages, 3600);
+        }
     }
 
     public function listen(): mixed
@@ -44,17 +54,38 @@ class LaravelSseTransport extends BaseTransport
                 ob_flush();
                 flush();
                 
-                // Keep the connection open and send pings to prevent 504 Gateway Timeout
+                $lastPing = time();
+                $lastIndex = 0;
+                $cacheKey = 'mcp_messages_' . $sessionId;
+                
+                // Keep the connection open and poll for messages
                 while (true) {
-                    sleep(15);
-                    echo ": keepalive\n\n";
-                    ob_flush();
-                    flush();
+                    // Check for new messages from POST requests
+                    $messages = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+                    for ($i = $lastIndex; $i < count($messages); $i++) {
+                        echo "event: message\n";
+                        echo "data: {$messages[$i]}\n\n";
+                        ob_flush();
+                        flush();
+                    }
+                    $lastIndex = count($messages);
+                    
+                    // Send keepalive pings every 15 seconds
+                    if (time() - $lastPing >= 15) {
+                        echo ": keepalive\n\n";
+                        ob_flush();
+                        flush();
+                        $lastPing = time();
+                    }
                     
                     // Prevent PHP-FPM zombie processes by exiting if client disconnected
                     if (connection_aborted()) {
+                        // Clean up messages queue
+                        \Illuminate\Support\Facades\Cache::forget($cacheKey);
                         break;
                     }
+                    
+                    sleep(1);
                 }
             };
             

@@ -13,4 +13,12 @@ This is a Laravel application integrated with Inertia.js and Vue 3 for an Accoun
 
 ## Git Configuration
 - **Remote URL:** `https://github.com/Eng-Ma/rentisy.git`
-- **Initial State:** Non-git repository, needs initialization.
+
+## MCP Server Configuration
+- **SSE Endpoint:** `https://rantisy.matajir.io/mcp/sse`
+- **Messages Endpoint:** `https://rantisy.matajir.io/mcp/messages`
+- **Controller:** `App\Http\Controllers\McpController`
+- **Transport:** `App\MCP\LaravelSseTransport`
+- **Tools:** `App\MCP\AccountingTools` (`get_accounts`, `get_invoices`, `get_system_status`)
+- **OAuth Discovery:** Endpoints configured in `routes/web.php` (`/.well-known/oauth-authorization-server`, `/oauth/authorize`, `/oauth/token`, `/oauth/register`)
+

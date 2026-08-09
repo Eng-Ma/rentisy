@@ -17,30 +17,6 @@ class McpController extends Controller
     {
         $transport = new StreamableHttpTransport($psrRequest);
 
-        // We use Laravel Cache for IPC between the SSE GET process and POST requests.
-        $transport->setOutgoingMessagesProvider(function (?Uuid $sessionId) {
-            if (!$sessionId) return [];
-            $key = "mcp_outgoing_{$sessionId}";
-            $messages = Cache::pull($key, []); // pull to consume
-            return $messages;
-        });
-
-        $transport->setResponseProvider(function ($requestId, ?Uuid $sessionId) {
-            if (!$sessionId) return null;
-            $key = "mcp_response_{$sessionId}_{$requestId}";
-            return Cache::pull($key);
-        });
-
-        $transport->setResponseHandler(function ($response, ?Uuid $sessionId) {
-            if (!$sessionId) return;
-            $key = "mcp_outgoing_{$sessionId}";
-            $messages = Cache::get($key, []);
-            // Encode message for SSE
-            $encoded = json_encode($response);
-            $messages[] = ['message' => $encoded];
-            Cache::put($key, $messages, 300);
-        });
-
         return $transport;
     }
 

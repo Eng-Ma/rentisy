@@ -116,7 +116,7 @@ class LaravelSseTransport extends BaseTransport
         if ($method === 'POST') {
             $body = request()->getContent();
             $queryParams = $this->request->getQueryParams();
-            $clientSessionIdStr = $queryParams['sessionId'] ?? '';
+            $effectiveSessionId = (!empty($queryParams['sessionId'])) ? $queryParams['sessionId'] : 'default_http_session';
             
             $jsonBody = json_decode($body, true) ?? [];
             $isInitialize = ($jsonBody['method'] ?? '') === 'initialize';
@@ -132,13 +132,13 @@ class LaravelSseTransport extends BaseTransport
                 
                 $internalSessionId = $this->sessionId;
                 
-                if ($internalSessionId && $clientSessionIdStr) {
-                    \Illuminate\Support\Facades\Cache::store('file')->put('mcp_session_map_' . $clientSessionIdStr, $internalSessionId->toRfc4122(), 3600);
+                if ($internalSessionId) {
+                    \Illuminate\Support\Facades\Cache::store('file')->put('mcp_session_map_' . $effectiveSessionId, $internalSessionId->toRfc4122(), 3600);
                 }
             } else {
                 // For subsequent requests, lookup the internal session ID
-                $mappedIdStr = \Illuminate\Support\Facades\Cache::store('file')->get('mcp_session_map_' . $clientSessionIdStr);
-                $internalSessionId = $mappedIdStr ? Uuid::fromString($mappedIdStr) : ($clientSessionIdStr ? Uuid::fromString($clientSessionIdStr) : null);
+                $mappedIdStr = \Illuminate\Support\Facades\Cache::store('file')->get('mcp_session_map_' . $effectiveSessionId);
+                $internalSessionId = $mappedIdStr ? Uuid::fromString($mappedIdStr) : Uuid::v4();
                 
                 if (is_callable($this->messageListener)) {
                     ($this->messageListener)($this, $body, $internalSessionId);
@@ -151,15 +151,15 @@ class LaravelSseTransport extends BaseTransport
             
             foreach ($outgoing as $msg) {
                 $lastMsg = $msg['message'];
-                if ($clientSessionIdStr) {
-                    $cacheKey = 'mcp_messages_' . $clientSessionIdStr;
+                if (!empty($queryParams['sessionId'])) {
+                    $cacheKey = 'mcp_messages_' . $queryParams['sessionId'];
                     $messages = \Illuminate\Support\Facades\Cache::store('file')->get($cacheKey, []);
                     $messages[] = $msg['message'];
                     \Illuminate\Support\Facades\Cache::store('file')->put($cacheKey, $messages, 3600);
                 }
             }
             
-            if (empty($clientSessionIdStr) && $lastMsg !== null) {
+            if (empty($queryParams['sessionId']) && $lastMsg !== null) {
                 return response($lastMsg, 200)
                     ->header('Content-Type', 'application/json')
                     ->header('Access-Control-Allow-Origin', $origin)

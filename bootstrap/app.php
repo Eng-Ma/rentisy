@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             '/mcp/messages',
             '/oauth/token',
+            '/oauth/register',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

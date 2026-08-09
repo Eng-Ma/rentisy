@@ -49,9 +49,17 @@ Route::get('/.well-known/oauth-authorization-server', function () {
         'issuer' => url('/'),
         'authorization_endpoint' => url('/oauth/authorize'),
         'token_endpoint' => url('/oauth/token'),
+        'registration_endpoint' => url('/oauth/register'),
         'response_types_supported' => ['code'],
         'grant_types_supported' => ['authorization_code'],
     ]);
+});
+
+Route::post('/oauth/register', function () {
+    return response()->json([
+        'client_id' => 'dummy_mcp_client_id',
+        'client_secret' => 'dummy_mcp_client_secret',
+    ], 201);
 });
 
 Route::get('/oauth/authorize', function (\Illuminate\Http\Request $request) {

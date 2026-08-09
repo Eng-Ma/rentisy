@@ -70,8 +70,9 @@ class LaravelSseTransport extends BaseTransport
                     }
                     $lastIndex = count($messages);
                     
-                    // Send keepalive pings every 15 seconds
-                    if (time() - $lastPing >= 15) {
+                    // Send keepalive pings every 1 second to instantly detect if client disconnected
+                    // This forces connection_aborted() to update and frees the FPM worker immediately.
+                    if (time() - $lastPing >= 1) {
                         echo ": keepalive\n\n";
                         ob_flush();
                         flush();

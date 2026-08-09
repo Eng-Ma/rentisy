@@ -15,7 +15,16 @@ class McpController extends Controller
 {
     private function configureTransport(ServerRequestInterface $psrRequest): StreamableHttpTransport
     {
-        $transport = new StreamableHttpTransport($psrRequest);
+        $transport = new StreamableHttpTransport(
+            $psrRequest,
+            null,
+            null,
+            null,
+            [
+                new \Mcp\Server\Transport\Http\Middleware\CorsMiddleware(),
+                new \Mcp\Server\Transport\Http\Middleware\ProtocolVersionMiddleware(),
+            ]
+        );
 
         return $transport;
     }

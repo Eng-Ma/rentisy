@@ -46,10 +46,14 @@ class McpController extends Controller
 
     public function handle(ServerRequestInterface $psrRequest)
     {
+        $accountingTools = new AccountingTools();
+
         // Build the server with our AccountingTools
         $server = Server::builder()
             ->setServerInfo('Laravel-Accounting-MCP', '1.0.0')
-            ->addCapability(new AccountingTools())
+            ->addTool([$accountingTools, 'getAccounts'])
+            ->addTool([$accountingTools, 'getInvoices'])
+            ->addTool([$accountingTools, 'getSystemStatus'])
             ->build();
 
         $transport = $this->configureTransport($psrRequest);

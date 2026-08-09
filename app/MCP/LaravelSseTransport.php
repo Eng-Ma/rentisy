@@ -31,9 +31,9 @@ class LaravelSseTransport extends BaseTransport
         if ($clientSessionIdStr) {
             $cacheKey = 'mcp_messages_' . $clientSessionIdStr;
             // Append the new message to the queue
-            $messages = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+            $messages = \Illuminate\Support\Facades\Cache::store('file')->get($cacheKey, []);
             $messages[] = $data;
-            \Illuminate\Support\Facades\Cache::put($cacheKey, $messages, 3600);
+            \Illuminate\Support\Facades\Cache::store('file')->put($cacheKey, $messages, 3600);
         }
     }
 

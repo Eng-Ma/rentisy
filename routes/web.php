@@ -46,21 +46,19 @@ Route::match(['GET', 'POST', 'OPTIONS'], '/mcp/messages', [\App\Http\Controllers
 // Dummy OAuth routes to satisfy Claude Web / Custom Actions MCP registration
 Route::match(['GET', 'OPTIONS'], '/.well-known/oauth-authorization-server', function () {
     return response()->json([
-        "issuer" => "https://rantisy.matajir.io",
-        "authorization_endpoint" => "https://rantisy.matajir.io/oauth/authorize",
-        "token_endpoint" => "https://rantisy.matajir.io/oauth/token",
-        "registration_endpoint" => "https://rantisy.matajir.io/oauth/register",
-        "scopes_supported" => ["mcp"],
-        "response_types_supported" => ["code"],
-        "grant_types_supported" => ["authorization_code", "refresh_token"],
-        "token_endpoint_auth_methods_supported" => ["none", "client_secret_post"]
+        'issuer' => url('/'),
+        'authorization_endpoint' => url('/oauth/authorize'),
+        'token_endpoint' => url('/oauth/token'),
+        'registration_endpoint' => url('/oauth/register'),
+        'response_types_supported' => ['code'],
+        'grant_types_supported' => ['authorization_code'],
     ])->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
 });
 
 Route::match(['POST', 'OPTIONS'], '/oauth/register', function () {
     return response()->json([
-        "client_id" => "dummy_client_" . uniqid(),
-        "client_secret" => "dummy_secret"
+        'client_id' => 'dummy_mcp_client_id',
+        'client_secret' => 'dummy_mcp_client_secret',
     ], 201)->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
 });
 
@@ -70,15 +68,14 @@ Route::match(['GET', 'POST', 'OPTIONS'], '/oauth/authorize', function (Illuminat
     }
     $redirectUri = $request->query('redirect_uri');
     $state = $request->query('state');
-    
-    return redirect()->away($redirectUri . '?code=dummy_auth_code&state=' . $state);
+    // Instantly redirect back with a dummy code
+    return redirect()->away($redirectUri . '?code=dummy_mcp_code&state=' . urlencode($state));
 });
 
 Route::match(['POST', 'OPTIONS'], '/oauth/token', function () {
     return response()->json([
-        "access_token" => "dummy_access_token",
-        "token_type" => "Bearer",
-        "expires_in" => 3600,
-        "refresh_token" => "dummy_refresh_token"
+        'access_token' => 'dummy_mcp_access_token',
+        'token_type' => 'Bearer',
+        'expires_in' => 31536000,
     ])->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
 });

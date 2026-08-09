@@ -26,6 +26,7 @@ class McpController extends Controller
             ->setSession($sessionStore)
             ->addTool([$accountingTools, 'getAccounts'])
             ->addTool([$accountingTools, 'getInvoices'])
+            ->addTool([$accountingTools, 'getBills'])
             ->addTool([$accountingTools, 'getSystemStatus'])
             ->build();
 

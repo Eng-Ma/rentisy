@@ -12,7 +12,6 @@ use Symfony\Component\Uid\Uuid;
 class LaravelSseTransport extends BaseTransport
 {
     private ServerRequestInterface $request;
-    private ?string $immediateResponse = null;
 
     public function __construct(ServerRequestInterface $request)
     {
@@ -135,12 +134,6 @@ class LaravelSseTransport extends BaseTransport
                 if (is_callable($this->messageListener)) {
                     ($this->messageListener)($this, $body, $internalSessionId);
                 }
-            }
-            
-            if ($this->immediateResponse !== null) {
-                return response($this->immediateResponse, 200)
-                    ->header('Content-Type', 'application/json')
-                    ->header('Access-Control-Allow-Origin', '*');
             }
             
             return response()->json(['status' => 'accepted'], 202)->header('Access-Control-Allow-Origin', '*');

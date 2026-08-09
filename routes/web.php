@@ -43,28 +43,43 @@ require __DIR__.'/auth.php';
 Route::match(['GET', 'POST', 'OPTIONS'], '/mcp/sse', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.sse');
 Route::match(['GET', 'POST', 'OPTIONS'], '/mcp/messages', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.messages');
 
-// Dummy OAuth routes to satisfy Claude Web / Custom Actions MCP registration
-Route::match(['GET', 'OPTIONS'], '/.well-known/oauth-authorization-server', function () {
+$oauthConfig = function (Illuminate\Http\Request $request) {
+    $origin = $request->header('Origin') ?: '*';
+    if ($request->isMethod('OPTIONS')) {
+        return response('', 204)->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
+    }
+    
+    // Dynamically set issuer to match the requested URL's base to satisfy strict OAuth clients
+    $issuer = $request->url();
+    if (str_ends_with($issuer, '/.well-known/oauth-authorization-server')) {
+        $issuer = substr($issuer, 0, -strlen('/.well-known/oauth-authorization-server'));
+    }
+    
     return response()->json([
-        'issuer' => url('/'),
+        'issuer' => $issuer ?: url('/'),
         'authorization_endpoint' => url('/oauth/authorize'),
         'token_endpoint' => url('/oauth/token'),
         'registration_endpoint' => url('/oauth/register'),
         'response_types_supported' => ['code'],
         'grant_types_supported' => ['authorization_code'],
-    ])->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
-});
+    ])->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
+};
 
-Route::match(['POST', 'OPTIONS'], '/oauth/register', function () {
+Route::match(['GET', 'OPTIONS'], '/.well-known/oauth-authorization-server', $oauthConfig);
+Route::match(['GET', 'OPTIONS'], '/mcp/sse/.well-known/oauth-authorization-server', $oauthConfig);
+
+Route::match(['POST', 'OPTIONS'], '/oauth/register', function (Illuminate\Http\Request $request) {
+    $origin = $request->header('Origin') ?: '*';
     return response()->json([
         'client_id' => 'dummy_mcp_client_id',
         'client_secret' => 'dummy_mcp_client_secret',
-    ], 201)->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
+    ], 201)->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
 });
 
 Route::match(['GET', 'POST', 'OPTIONS'], '/oauth/authorize', function (Illuminate\Http\Request $request) {
+    $origin = $request->header('Origin') ?: '*';
     if ($request->isMethod('OPTIONS')) {
-        return response('', 204)->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
+        return response('', 204)->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
     }
     $redirectUri = $request->query('redirect_uri');
     $state = $request->query('state');
@@ -72,10 +87,14 @@ Route::match(['GET', 'POST', 'OPTIONS'], '/oauth/authorize', function (Illuminat
     return redirect()->away($redirectUri . '?code=dummy_mcp_code&state=' . urlencode($state));
 });
 
-Route::match(['POST', 'OPTIONS'], '/oauth/token', function () {
+Route::match(['POST', 'OPTIONS'], '/oauth/token', function (Illuminate\Http\Request $request) {
+    $origin = $request->header('Origin') ?: '*';
+    if ($request->isMethod('OPTIONS')) {
+        return response('', 204)->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
+    }
     return response()->json([
-        'access_token' => 'dummy_mcp_access_token',
+        'access_token' => 'dummy_mcp_token',
         'token_type' => 'Bearer',
-        'expires_in' => 31536000,
-    ])->header('Access-Control-Allow-Origin', '*')->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
+        'expires_in' => 3600,
+    ])->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
 });

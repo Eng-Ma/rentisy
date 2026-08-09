@@ -18,9 +18,12 @@ class McpController extends Controller
     {
         $accountingTools = new AccountingTools();
 
+        $sessionStore = new \App\MCP\LaravelCacheSessionStore();
+
         // Build the server with our AccountingTools
         $server = Server::builder()
             ->setServerInfo('Laravel-Accounting-MCP', '1.0.0')
+            ->setSession(1, 100, $sessionStore)
             ->addTool([$accountingTools, 'getAccounts'])
             ->addTool([$accountingTools, 'getInvoices'])
             ->addTool([$accountingTools, 'getSystemStatus'])

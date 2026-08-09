@@ -59,8 +59,9 @@ class LaravelSseTransport extends BaseTransport
                 
                 // Keep the connection open and poll for messages
                 while (true) {
-                    // Check for new messages from POST requests
-                    $messages = \Illuminate\Support\Facades\Cache::get($cacheKey, []);
+                    // Check for new messages from POST requests. We explicitly use 'file' 
+                    // store to prevent locking the SQLite database in an infinite loop!
+                    $messages = \Illuminate\Support\Facades\Cache::store('file')->get($cacheKey, []);
                     for ($i = $lastIndex; $i < count($messages); $i++) {
                         echo "event: message\n";
                         echo "data: {$messages[$i]}\n\n";
@@ -80,7 +81,7 @@ class LaravelSseTransport extends BaseTransport
                     // Prevent PHP-FPM zombie processes by exiting if client disconnected
                     if (connection_aborted()) {
                         // Clean up messages queue
-                        \Illuminate\Support\Facades\Cache::forget($cacheKey);
+                        \Illuminate\Support\Facades\Cache::store('file')->forget($cacheKey);
                         break;
                     }
                     
@@ -124,11 +125,11 @@ class LaravelSseTransport extends BaseTransport
                 // The SDK generated a new session ID and saved it in $this->sessionId.
                 // We must map the client's session ID to this internal session ID.
                 if ($this->sessionId && $clientSessionIdStr) {
-                    \Illuminate\Support\Facades\Cache::put('mcp_session_map_' . $clientSessionIdStr, $this->sessionId->toRfc4122(), 3600);
+                    \Illuminate\Support\Facades\Cache::store('file')->put('mcp_session_map_' . $clientSessionIdStr, $this->sessionId->toRfc4122(), 3600);
                 }
             } else {
                 // For subsequent requests, lookup the internal session ID
-                $mappedIdStr = \Illuminate\Support\Facades\Cache::get('mcp_session_map_' . $clientSessionIdStr);
+                $mappedIdStr = \Illuminate\Support\Facades\Cache::store('file')->get('mcp_session_map_' . $clientSessionIdStr);
                 $internalSessionId = $mappedIdStr ? Uuid::fromString($mappedIdStr) : ($clientSessionIdStr ? Uuid::fromString($clientSessionIdStr) : null);
                 
                 if (is_callable($this->messageListener)) {

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Psr\Http\Message\ServerRequestInterface;
 use Symfony\Bridge\PsrHttpMessage\Factory\HttpFoundationFactory;
-use Mcp\Server\Server;
+use Mcp\Server;
 use Mcp\Server\Transport\StreamableHttpTransport;
 use Symfony\Component\Uid\Uuid;
 use Illuminate\Support\Facades\Cache;

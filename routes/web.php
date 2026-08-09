@@ -39,9 +39,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 
-// MCP Server Routes
+// MCP Endpoints
 Route::get('/mcp/sse', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.sse');
-Route::post('/mcp/messages', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.messages');
+Route::match(['GET', 'POST', 'OPTIONS'], '/mcp/messages', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.messages');
 
 // Dummy OAuth routes to satisfy Claude Web / Custom Actions MCP registration
 Route::get('/.well-known/oauth-authorization-server', function () {

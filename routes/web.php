@@ -38,3 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
+
+// MCP Server Routes
+Route::get('/mcp/sse', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.sse');
+Route::post('/mcp/messages', [\App\Http\Controllers\McpController::class, 'handle'])->name('mcp.messages');

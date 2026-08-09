@@ -112,7 +112,7 @@ class LaravelSseTransport extends BaseTransport
         }
 
         if ($method === 'POST') {
-            $body = (string) $this->request->getBody();
+            $body = request()->getContent();
             $queryParams = $this->request->getQueryParams();
             $clientSessionIdStr = $queryParams['sessionId'] ?? '';
             

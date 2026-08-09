@@ -116,8 +116,8 @@ class LaravelSseTransport extends BaseTransport
             $queryParams = $this->request->getQueryParams();
             $clientSessionIdStr = $queryParams['sessionId'] ?? '';
             
-            // Check if this is the initialize request
-            $isInitialize = str_contains($body, '"method":"initialize"');
+            $jsonBody = json_decode($body, true) ?? [];
+            $isInitialize = ($jsonBody['method'] ?? '') === 'initialize';
             
             $internalSessionId = null;
 

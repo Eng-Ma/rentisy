@@ -12,9 +12,6 @@ use Symfony\Component\Uid\Uuid;
 class LaravelSseTransport extends BaseTransport
 {
     private ServerRequestInterface $request;
-    private ?Uuid $sessionId = null;
-    /** @var callable|null */
-    private $messageListener;
     private ?string $latestMessage = null;
 
     public function __construct(ServerRequestInterface $request)

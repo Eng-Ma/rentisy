@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\DB;
 
 class AccountingTools
 {
+    // --- QUERY TOOLS ---
+
     #[McpTool(name: 'get_accounts', description: 'Get a list of all financial accounts')]
     public function getAccounts(): string
     {
@@ -83,6 +85,41 @@ class AccountingTools
         return "Found " . $parties->count() . " parties:\n" . $parties->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
+    #[McpTool(name: 'get_items', description: 'Get a list of items / products in catalog')]
+    public function getItems(?string $search = null, int $limit = 20): string
+    {
+        $query = Item::with('category');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('barcode', 'like', "%{$search}%");
+            });
+        }
+
+        $items = $query->take($limit)->get();
+        if ($items->isEmpty()) return "No items found.";
+        return "Found " . $items->count() . " items:\n" . $items->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_stores', description: 'Get a list of active stores / warehouses')]
+    public function getStores(): string
+    {
+        $stores = Store::where('is_active', true)->get();
+        if ($stores->isEmpty()) return "No active stores found.";
+        return "Found " . $stores->count() . " stores:\n" . $stores->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_categories', description: 'Get a list of item categories')]
+    public function getCategories(): string
+    {
+        $categories = Category::all();
+        if ($categories->isEmpty()) return "No categories found.";
+        return "Found " . $categories->count() . " categories:\n" . $categories->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    // --- CREATE TOOLS ---
+
     #[McpTool(name: 'create_customer', description: 'Create a new customer party')]
     public function createCustomer(?string $name = null, ?string $phone = null, ?string $address = null, ?int $accountId = null): string
     {
@@ -113,23 +150,6 @@ class AccountingTools
         return "Vendor created successfully with ID: {$party->id}\n" . $party->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
-    #[McpTool(name: 'get_items', description: 'Get a list of items / products in catalog')]
-    public function getItems(?string $search = null, int $limit = 20): string
-    {
-        $query = Item::with('category');
-
-        if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('barcode', 'like', "%{$search}%");
-            });
-        }
-
-        $items = $query->take($limit)->get();
-        if ($items->isEmpty()) return "No items found.";
-        return "Found " . $items->count() . " items:\n" . $items->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    }
-
     #[McpTool(name: 'create_item', description: 'Create a new product or inventory item')]
     public function createItem(?string $name = null, float $purchasePrice = 10.0, float $salesPrice = 15.0, string $unit = 'piece', ?int $categoryId = null, ?string $barcode = null, ?string $description = null): string
     {
@@ -148,14 +168,6 @@ class AccountingTools
         return "Item created successfully with ID: {$item->id}\n" . $item->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
-    #[McpTool(name: 'get_stores', description: 'Get a list of active stores / warehouses')]
-    public function getStores(): string
-    {
-        $stores = Store::where('is_active', true)->get();
-        if ($stores->isEmpty()) return "No active stores found.";
-        return "Found " . $stores->count() . " stores:\n" . $stores->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    }
-
     #[McpTool(name: 'create_store', description: 'Create a new store or warehouse')]
     public function createStore(?string $name = null, ?string $location = null, bool $isActive = true): string
     {
@@ -167,14 +179,6 @@ class AccountingTools
         ]);
 
         return "Store created successfully with ID: {$store->id}\n" . $store->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-    }
-
-    #[McpTool(name: 'get_categories', description: 'Get a list of item categories')]
-    public function getCategories(): string
-    {
-        $categories = Category::all();
-        if ($categories->isEmpty()) return "No categories found.";
-        return "Found " . $categories->count() . " categories:\n" . $categories->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     #[McpTool(name: 'create_category', description: 'Create a new item category')]
@@ -196,7 +200,6 @@ class AccountingTools
     {
         $type = in_array($type, ['sale', 'purchase', 'sale_return', 'purchase_return']) ? $type : 'sale';
 
-        // 1. Resolve Party
         $party = $partyId ? Party::find($partyId) : null;
         if (!$party) {
             $expectedType = in_array($type, ['sale', 'sale_return']) ? 'customer' : 'vendor';
@@ -210,7 +213,6 @@ class AccountingTools
             ]);
         }
 
-        // 2. Resolve Store
         $store = $storeId ? Store::find($storeId) : null;
         if (!$store) {
             $store = Store::where('is_active', true)->first() ?? Store::first();
@@ -222,7 +224,6 @@ class AccountingTools
             ]);
         }
 
-        // 3. Resolve Lines Data
         $linesData = [];
         if (!empty($linesJson)) {
             $linesData = is_array($linesJson) ? $linesJson : json_decode($linesJson, true);
@@ -451,6 +452,290 @@ class AccountingTools
             return "Journal entry created successfully with ID {$entry->id}:\n" . $entry->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         } catch (\Throwable $e) {
             return "Error creating journal entry: " . $e->getMessage();
+        }
+    }
+
+    // --- UPDATE TOOLS ---
+
+    #[McpTool(name: 'update_party', description: 'Update an existing customer or vendor party by ID')]
+    public function updateParty(int $id, ?string $name = null, ?string $phone = null, ?string $address = null, ?string $type = null, ?int $accountId = null): string
+    {
+        $party = Party::find($id);
+        if (!$party) {
+            return "Error: Party with ID {$id} not found.";
+        }
+
+        $data = array_filter([
+            'name' => $name,
+            'phone' => $phone,
+            'address' => $address,
+            'type' => $type,
+            'account_id' => $accountId,
+        ], fn($v) => $v !== null);
+
+        $party->update($data);
+
+        return "Party #{$id} updated successfully:\n" . $party->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_item', description: 'Update an existing product/item by ID')]
+    public function updateItem(int $id, ?string $name = null, ?float $purchasePrice = null, ?float $salesPrice = null, ?string $unit = null, ?int $categoryId = null, ?string $barcode = null, ?string $description = null): string
+    {
+        $item = Item::find($id);
+        if (!$item) {
+            return "Error: Item with ID {$id} not found.";
+        }
+
+        $data = array_filter([
+            'name' => $name,
+            'purchase_price' => $purchasePrice,
+            'sales_price' => $salesPrice,
+            'unit' => $unit,
+            'category_id' => $categoryId,
+            'barcode' => $barcode,
+            'description' => $description,
+        ], fn($v) => $v !== null);
+
+        $item->update($data);
+
+        return "Item #{$id} updated successfully:\n" . $item->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_store', description: 'Update an existing store/warehouse by ID')]
+    public function updateStore(int $id, ?string $name = null, ?string $location = null, ?bool $isActive = null): string
+    {
+        $store = Store::find($id);
+        if (!$store) {
+            return "Error: Store with ID {$id} not found.";
+        }
+
+        $data = array_filter([
+            'name' => $name,
+            'location' => $location,
+            'is_active' => $isActive,
+        ], fn($v) => $v !== null);
+
+        $store->update($data);
+
+        return "Store #{$id} updated successfully:\n" . $store->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_category', description: 'Update an existing item category by ID')]
+    public function updateCategory(int $id, ?string $name = null, ?string $description = null, ?int $parentId = null, ?bool $isActive = null): string
+    {
+        $category = Category::find($id);
+        if (!$category) {
+            return "Error: Category with ID {$id} not found.";
+        }
+
+        $data = array_filter([
+            'name' => $name,
+            'description' => $description,
+            'parent_id' => $parentId,
+            'is_active' => $isActive,
+        ], fn($v) => $v !== null);
+
+        $category->update($data);
+
+        return "Category #{$id} updated successfully:\n" . $category->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_account', description: 'Update an existing financial account by ID')]
+    public function updateAccount(int $id, ?string $code = null, ?string $name = null, ?string $type = null, ?string $balanceType = null, ?int $parentId = null, ?string $description = null): string
+    {
+        $account = Account::find($id);
+        if (!$account) {
+            return "Error: Account with ID {$id} not found.";
+        }
+
+        $data = array_filter([
+            'code' => $code,
+            'name' => $name,
+            'type' => $type,
+            'balance_type' => $balanceType,
+            'parent_id' => $parentId,
+            'description' => $description,
+        ], fn($v) => $v !== null);
+
+        $account->update($data);
+
+        return "Account #{$id} updated successfully:\n" . $account->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    // --- DELETE TOOLS ---
+
+    #[McpTool(name: 'delete_invoice', description: 'Delete an invoice by ID and automatically revert inventory and associated journal entry')]
+    public function deleteInvoice(?int $id = null): string
+    {
+        $invoice = $id ? Invoice::find($id) : Invoice::latest()->first();
+        if (!$invoice) {
+            return "Error: Invoice not found.";
+        }
+
+        $invoiceId = $invoice->id;
+
+        try {
+            DB::transaction(function () use ($invoice) {
+                foreach ($invoice->lines as $line) {
+                    $storeItem = StoreItem::where('store_id', $invoice->store_id)
+                        ->where('item_id', $line->item_id)
+                        ->first();
+                    if ($storeItem) {
+                        if (in_array($invoice->type, ['purchase', 'sale_return'])) {
+                            $storeItem->quantity -= $line->quantity;
+                        } else {
+                            $storeItem->quantity += $line->quantity;
+                        }
+                        $storeItem->save();
+                    }
+                }
+
+                if ($invoice->journal_entry_id) {
+                    $journalEntry = JournalEntry::find($invoice->journal_entry_id);
+                    if ($journalEntry) {
+                        $journalEntry->lines()->delete();
+                        $journalEntry->delete();
+                    }
+                }
+
+                $invoice->lines()->delete();
+                $invoice->delete();
+            });
+
+            return "Invoice #{$invoiceId} and its associated stock updates & journal entry deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting invoice #{$invoiceId}: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_party', description: 'Delete a customer or vendor party by ID')]
+    public function deleteParty(?int $id = null): string
+    {
+        $party = $id ? Party::find($id) : Party::latest()->first();
+        if (!$party) {
+            return "Error: Party not found.";
+        }
+
+        $partyId = $party->id;
+        $partyName = $party->name;
+
+        if ($party->invoices()->count() > 0) {
+            return "Error: Cannot delete party '{$partyName}' (#{$partyId}) because it has existing invoices linked to it.";
+        }
+
+        try {
+            $party->delete();
+            return "Party '{$partyName}' (#{$partyId}) deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting party #{$partyId}: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_item', description: 'Delete an inventory item by ID')]
+    public function deleteItem(?int $id = null): string
+    {
+        $item = $id ? Item::find($id) : Item::latest()->first();
+        if (!$item) {
+            return "Error: Item not found.";
+        }
+
+        $itemId = $item->id;
+        $itemName = $item->name;
+
+        try {
+            DB::transaction(function () use ($item) {
+                StoreItem::where('item_id', $item->id)->delete();
+                $item->delete();
+            });
+            return "Item '{$itemName}' (#{$itemId}) deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting item #{$itemId}: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_store', description: 'Delete a store/warehouse by ID')]
+    public function deleteStore(?int $id = null): string
+    {
+        $store = $id ? Store::find($id) : Store::latest()->first();
+        if (!$store) {
+            return "Error: Store not found.";
+        }
+
+        $storeId = $store->id;
+        $storeName = $store->name;
+
+        if (Invoice::where('store_id', $storeId)->count() > 0) {
+            return "Error: Cannot delete store '{$storeName}' (#{$storeId}) because it has existing invoices linked to it.";
+        }
+
+        try {
+            DB::transaction(function () use ($store) {
+                StoreItem::where('store_id', $store->id)->delete();
+                $store->delete();
+            });
+            return "Store '{$storeName}' (#{$storeId}) deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting store #{$storeId}: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_category', description: 'Delete a category by ID')]
+    public function deleteCategory(?int $id = null): string
+    {
+        $category = $id ? Category::find($id) : Category::latest()->first();
+        if (!$category) {
+            return "Error: Category not found.";
+        }
+
+        $categoryId = $category->id;
+        $categoryName = $category->name;
+
+        try {
+            Item::where('category_id', $categoryId)->update(['category_id' => null]);
+            $category->delete();
+            return "Category '{$categoryName}' (#{$categoryId}) deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting category #{$categoryId}: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_account', description: 'Delete a financial account by ID')]
+    public function deleteAccount(?int $id = null): string
+    {
+        $account = $id ? Account::find($id) : Account::latest()->first();
+        if (!$account) {
+            return "Error: Account not found.";
+        }
+
+        $accountId = $account->id;
+        $accountName = $account->name;
+
+        try {
+            $account->delete();
+            return "Account '{$accountName}' (#{$accountId}) deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting account #{$accountId}: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_journal_entry', description: 'Delete a manual journal entry by ID')]
+    public function deleteJournalEntry(?int $id = null): string
+    {
+        $entry = $id ? JournalEntry::find($id) : JournalEntry::latest()->first();
+        if (!$entry) {
+            return "Error: Journal entry not found.";
+        }
+
+        $entryId = $entry->id;
+
+        try {
+            DB::transaction(function () use ($entry) {
+                $entry->lines()->delete();
+                $entry->delete();
+            });
+            return "Journal entry #{$entryId} deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting journal entry #{$entryId}: " . $e->getMessage();
         }
     }
 }

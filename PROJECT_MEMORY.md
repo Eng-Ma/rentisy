@@ -19,8 +19,10 @@ This is a Laravel application integrated with Inertia.js and Vue 3 for an Accoun
 - **Messages Endpoint:** `https://rantisy.matajir.io/mcp/messages`
 - **Controller:** `App\Http\Controllers\McpController`
 - **Transport:** `App\MCP\LaravelSseTransport`
-- **Tools:** `App\MCP\AccountingTools`
+- **Tools (Full CRUD Suite):** `App\MCP\AccountingTools`
   - **Read Queries:** `get_accounts`, `get_invoices`, `get_bills`, `get_system_status`, `get_parties`, `get_items`, `get_stores`, `get_categories`
-  - **Admin Operations (Writes):** `create_customer`, `create_vendor`, `create_item`, `create_store`, `create_category`, `create_invoice`, `create_account`, `create_journal_entry`
+  - **Creation (Writes):** `create_customer`, `create_vendor`, `create_item`, `create_store`, `create_category`, `create_invoice`, `create_account`, `create_journal_entry`
+  - **Updates:** `update_party`, `update_item`, `update_store`, `update_category`, `update_account`
+  - **Deletions:** `delete_invoice`, `delete_party`, `delete_item`, `delete_store`, `delete_category`, `delete_account`, `delete_journal_entry`
 - **OAuth Discovery:** Endpoints configured in `routes/web.php` (`/.well-known/oauth-authorization-server`, `/oauth/authorize`, `/oauth/token`, `/oauth/register`)
 - **Transport Cache Store:** Must explicitly use `Cache::store('file')` across all send/receive methods so FPM POST and SSE workers communicate.

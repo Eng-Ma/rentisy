@@ -18,9 +18,9 @@ class McpController extends Controller
         $accountingTools = new AccountingTools();
         $sessionStore = new \App\MCP\LaravelCacheSessionStore();
 
-        // Build the server with all AccountingTools (query & admin operations)
+        // Build the server with full CRUD AccountingTools (Queries, Creates, Updates, Deletions)
         $server = Server::builder()
-            ->setServerInfo('Laravel-Accounting-MCP', '1.2.0')
+            ->setServerInfo('Laravel-Accounting-MCP', '2.0.0')
             ->setSession($sessionStore)
             // Queries
             ->addTool([$accountingTools, 'getAccounts'])
@@ -31,7 +31,7 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'getItems'])
             ->addTool([$accountingTools, 'getStores'])
             ->addTool([$accountingTools, 'getCategories'])
-            // Admin Operations (Writes)
+            // Creation Tools
             ->addTool([$accountingTools, 'createCustomer'])
             ->addTool([$accountingTools, 'createVendor'])
             ->addTool([$accountingTools, 'createItem'])
@@ -40,6 +40,20 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'createInvoice'])
             ->addTool([$accountingTools, 'createAccount'])
             ->addTool([$accountingTools, 'createJournalEntry'])
+            // Update Tools
+            ->addTool([$accountingTools, 'updateParty'])
+            ->addTool([$accountingTools, 'updateItem'])
+            ->addTool([$accountingTools, 'updateStore'])
+            ->addTool([$accountingTools, 'updateCategory'])
+            ->addTool([$accountingTools, 'updateAccount'])
+            // Deletion Tools
+            ->addTool([$accountingTools, 'deleteInvoice'])
+            ->addTool([$accountingTools, 'deleteParty'])
+            ->addTool([$accountingTools, 'deleteItem'])
+            ->addTool([$accountingTools, 'deleteStore'])
+            ->addTool([$accountingTools, 'deleteCategory'])
+            ->addTool([$accountingTools, 'deleteAccount'])
+            ->addTool([$accountingTools, 'deleteJournalEntry'])
             ->build();
 
         $transport = new LaravelSseTransport($psrRequest);

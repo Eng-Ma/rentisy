@@ -20,7 +20,7 @@ This is a Laravel application integrated with Inertia.js and Vue 3 for an Accoun
 - **Controller:** `App\Http\Controllers\McpController`
 - **Transport:** `App\MCP\LaravelSseTransport`
 - **Tools:** `App\MCP\AccountingTools`
-  - **Read Queries:** `get_accounts`, `get_invoices`, `get_bills`, `get_system_status`, `get_parties`, `get_items`, `get_stores`
-  - **Admin Operations (Writes):** `create_customer`, `create_vendor`, `create_item`, `create_invoice`, `create_account`, `create_journal_entry`
+  - **Read Queries:** `get_accounts`, `get_invoices`, `get_bills`, `get_system_status`, `get_parties`, `get_items`, `get_stores`, `get_categories`
+  - **Admin Operations (Writes):** `create_customer`, `create_vendor`, `create_item`, `create_store`, `create_category`, `create_invoice`, `create_account`, `create_journal_entry`
 - **OAuth Discovery:** Endpoints configured in `routes/web.php` (`/.well-known/oauth-authorization-server`, `/oauth/authorize`, `/oauth/token`, `/oauth/register`)
 - **Transport Cache Store:** Must explicitly use `Cache::store('file')` across all send/receive methods so FPM POST and SSE workers communicate.

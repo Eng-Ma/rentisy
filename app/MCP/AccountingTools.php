@@ -11,6 +11,7 @@ use App\Models\Store;
 use App\Models\StoreItem;
 use App\Models\JournalEntry;
 use App\Models\Currency;
+use App\Models\Category;
 use Illuminate\Support\Facades\DB;
 
 class AccountingTools
@@ -153,6 +154,41 @@ class AccountingTools
         $stores = Store::where('is_active', true)->get();
         if ($stores->isEmpty()) return "No active stores found.";
         return "Found " . $stores->count() . " stores:\n" . $stores->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_store', description: 'Create a new store or warehouse')]
+    public function createStore(?string $name = null, ?string $location = null, bool $isActive = true): string
+    {
+        $storeName = $name ?: ('Store ' . rand(100, 999));
+        $store = Store::create([
+            'name' => $storeName,
+            'location' => $location,
+            'is_active' => $isActive,
+        ]);
+
+        return "Store created successfully with ID: {$store->id}\n" . $store->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_categories', description: 'Get a list of item categories')]
+    public function getCategories(): string
+    {
+        $categories = Category::all();
+        if ($categories->isEmpty()) return "No categories found.";
+        return "Found " . $categories->count() . " categories:\n" . $categories->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_category', description: 'Create a new item category')]
+    public function createCategory(?string $name = null, ?string $description = null, ?int $parentId = null, bool $isActive = true): string
+    {
+        $categoryName = $name ?: ('Category ' . rand(10, 99));
+        $category = Category::create([
+            'name' => $categoryName,
+            'description' => $description,
+            'parent_id' => $parentId,
+            'is_active' => $isActive,
+        ]);
+
+        return "Category created successfully with ID: {$category->id}\n" . $category->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     #[McpTool(name: 'create_invoice', description: 'Create a new invoice (type: sale, purchase, sale_return, purchase_return). All parameters are optional with smart defaults.')]

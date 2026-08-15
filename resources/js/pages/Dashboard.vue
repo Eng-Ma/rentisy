@@ -158,34 +158,48 @@ defineProps<{
 
             <!-- Quick Access Menu -->
             <div class="mt-4">
-                <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">الوصول السريع</h2>
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                    <Link href="/reports/income-statement" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90">
-                        <div class="w-12 h-12 bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                            <BarChart3 class="w-6 h-6" />
+                <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-6">الوصول السريع لخدمات الأصيل الذهبي</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <Link href="/vouchers" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90 border border-emerald-500/20">
+                        <div class="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <Receipt class="w-6 h-6" />
                         </div>
-                        <span class="font-bold text-gray-800 dark:text-gray-200">قائمة الدخل</span>
-                    </Link>
-                    
-                    <Link href="/reports/trial-balance" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90">
-                        <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                            <TrendingUp class="w-6 h-6" />
-                        </div>
-                        <span class="font-bold text-gray-800 dark:text-gray-200">ميزان المراجعة</span>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">سندات القبض والصرف</span>
                     </Link>
 
-                    <Link href="/reports/account-statement" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90">
-                        <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                            <FileText class="w-6 h-6" />
-                        </div>
-                        <span class="font-bold text-gray-800 dark:text-gray-200">كشف حساب</span>
-                    </Link>
-                    
-                    <Link href="/journal-entries" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90">
-                        <div class="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <Link href="/checks" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90 border border-indigo-500/20">
+                        <div class="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
                             <CreditCard class="w-6 h-6" />
                         </div>
-                        <span class="font-bold text-gray-800 dark:text-gray-200">القيود اليومية</span>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">حافظة الشيكات</span>
+                    </Link>
+
+                    <Link href="/cost-centers" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90 border border-cyan-500/20">
+                        <div class="w-12 h-12 bg-cyan-100 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <BarChart3 class="w-6 h-6" />
+                        </div>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">مراكز التكلفة</span>
+                    </Link>
+
+                    <Link href="/stock-transfers" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90 border border-amber-500/20">
+                        <div class="w-12 h-12 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <Package class="w-6 h-6" />
+                        </div>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">مناقلات المخزون</span>
+                    </Link>
+
+                    <Link href="/quotations" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90 border border-blue-500/20">
+                        <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <FileText class="w-6 h-6" />
+                        </div>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">عروض الأسعار</span>
+                    </Link>
+
+                    <Link href="/reports" class="glass-card p-4 flex flex-col items-center justify-center text-center group hover:bg-white/90 dark:hover:bg-gray-800/90 border border-purple-500/20">
+                        <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                            <TrendingUp class="w-6 h-6" />
+                        </div>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">تقارير الأصيل</span>
                     </Link>
                 </div>
             </div>

@@ -31,13 +31,27 @@ onUnmounted(() => {
 
 const allCommands = [
     { id: 'dashboard', name: 'الرئيسية (Dashboard)', icon: LayoutDashboard, route: '/dashboard', category: 'عام' },
+    { id: 'vouchers', name: 'سندات القبض والصرف', icon: FileText, route: '/vouchers', category: 'السندات' },
+    { id: 'create_voucher', name: 'إنشاء سند مالي جديد', icon: FileText, route: '/vouchers/create', category: 'السندات' },
+    { id: 'checks', name: 'حافظة ودورة حياة الشيكات', icon: CreditCard, route: '/checks', category: 'الشيكات' },
+    { id: 'cost_centers', name: 'دليل مراكز التكلفة', icon: LayoutDashboard, route: '/cost-centers', category: 'المحاسبة' },
+    { id: 'stock_transfers', name: 'مناقلات وحركات المخزون', icon: Package, route: '/stock-transfers', category: 'المخزون' },
+    { id: 'create_stock_transfer', name: 'تسجيل مناقلة مخزون جديدة', icon: Package, route: '/stock-transfers/create', category: 'المخزون' },
+    { id: 'quotations', name: 'عروض الأسعار للعملاء', icon: FileText, route: '/quotations', category: 'المبيعات' },
+    { id: 'create_quotation', name: 'إنشاء عرض سعر جديد', icon: FileText, route: '/quotations/create', category: 'المبيعات' },
+    { id: 'fixed_assets', name: 'الأصول الثابتة والإهلاك', icon: Settings, route: '/fixed-assets', category: 'الأصول' },
+    { id: 'aging_report', name: 'تقرير أعمار الديون (Aging)', icon: FileText, route: '/reports/aging', category: 'التقارير' },
+    { id: 'cost_centers_report', name: 'كشف حساب مراكز التكلفة', icon: FileText, route: '/reports/cost-centers', category: 'التقارير' },
+    { id: 'checks_report', name: 'تقرير حافظة الشيكات', icon: CreditCard, route: '/reports/checks', category: 'التقارير' },
+    { id: 'stock_movement_report', name: 'كشف حركة وتقييم الأصناف', icon: Package, route: '/reports/stock-movement', category: 'التقارير' },
     { id: 'create_invoice', name: 'إنشاء فاتورة جديدة', icon: FileText, route: '/invoices/create', category: 'الفواتير' },
     { id: 'view_invoices', name: 'عرض الفواتير', icon: FileText, route: '/invoices', category: 'الفواتير' },
     { id: 'accounts', name: 'شجرة الحسابات', icon: CreditCard, route: '/accounts', category: 'المحاسبة' },
     { id: 'create_account', name: 'إضافة حساب جديد', icon: CreditCard, route: '/accounts/create', category: 'المحاسبة' },
     { id: 'parties', name: 'العملاء والموردين', icon: Users, route: '/parties', category: 'الجهات' },
     { id: 'items', name: 'الأصناف والمخزون', icon: Package, route: '/items', category: 'المخزون' },
-    { id: 'reports', name: 'التقارير المالية', icon: FileText, route: '/reports/income-statement', category: 'التقارير' },
+    { id: 'reports', name: 'جميع التقارير المالية', icon: FileText, route: '/reports', category: 'التقارير' },
+    { id: 'mcp_settings', name: 'اتصالات الذكاء الاصطناعي (MCP)', icon: Settings, route: '/settings/mcp', category: 'الإعدادات' },
     { id: 'settings', name: 'إعدادات الحساب', icon: Settings, route: '/settings/profile', category: 'الإعدادات' },
 ];
 

@@ -1,0 +1,1 @@
+@media print{body{background:#fff!important;color:#000!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}header,aside,.sidebar-inset>header,nav{display:none!important}main{padding:0!important;margin:0!important;background:#fff!important}@page{margin:1cm;size:A4 portrait}}

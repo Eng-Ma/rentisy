@@ -1,19 +1,34 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { router } from '@inertiajs/vue3';
-import { Search, FileText, Users, Package, CreditCard, LayoutDashboard, Settings, ArrowLeft } from 'lucide-vue-next';
+import { 
+    Search, 
+    FileText, 
+    Users, 
+    Package, 
+    CreditCard, 
+    LayoutDashboard, 
+    Settings, 
+    ArrowLeft,
+    Receipt,
+    Target,
+    ArrowLeftRight,
+    FileSpreadsheet,
+    Building2,
+    LineChart,
+    Bot
+} from 'lucide-vue-next';
 
 const isOpen = ref(false);
 const searchQuery = ref('');
 const searchInput = ref<HTMLInputElement | null>(null);
 
-// Keyboard shortcut to open Cmd+K or Ctrl+K
 const handleKeydown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         isOpen.value = !isOpen.value;
         if (isOpen.value) {
-            setTimeout(() => searchInput.value?.focus(), 100);
+            nextTick(() => searchInput.value?.focus());
         }
     }
     if (e.key === 'Escape' && isOpen.value) {
@@ -31,17 +46,17 @@ onUnmounted(() => {
 
 const allCommands = [
     { id: 'dashboard', name: 'الرئيسية (Dashboard)', icon: LayoutDashboard, route: '/dashboard', category: 'عام' },
-    { id: 'vouchers', name: 'سندات القبض والصرف', icon: FileText, route: '/vouchers', category: 'السندات' },
-    { id: 'create_voucher', name: 'إنشاء سند مالي جديد', icon: FileText, route: '/vouchers/create', category: 'السندات' },
+    { id: 'vouchers', name: 'سندات القبض والصرف', icon: Receipt, route: '/vouchers', category: 'السندات' },
+    { id: 'create_voucher', name: 'إنشاء سند مالي جديد', icon: Receipt, route: '/vouchers/create', category: 'السندات' },
     { id: 'checks', name: 'حافظة ودورة حياة الشيكات', icon: CreditCard, route: '/checks', category: 'الشيكات' },
-    { id: 'cost_centers', name: 'دليل مراكز التكلفة', icon: LayoutDashboard, route: '/cost-centers', category: 'المحاسبة' },
-    { id: 'stock_transfers', name: 'مناقلات وحركات المخزون', icon: Package, route: '/stock-transfers', category: 'المخزون' },
-    { id: 'create_stock_transfer', name: 'تسجيل مناقلة مخزون جديدة', icon: Package, route: '/stock-transfers/create', category: 'المخزون' },
-    { id: 'quotations', name: 'عروض الأسعار للعملاء', icon: FileText, route: '/quotations', category: 'المبيعات' },
-    { id: 'create_quotation', name: 'إنشاء عرض سعر جديد', icon: FileText, route: '/quotations/create', category: 'المبيعات' },
-    { id: 'fixed_assets', name: 'الأصول الثابتة والإهلاك', icon: Settings, route: '/fixed-assets', category: 'الأصول' },
-    { id: 'aging_report', name: 'تقرير أعمار الديون (Aging)', icon: FileText, route: '/reports/aging', category: 'التقارير' },
-    { id: 'cost_centers_report', name: 'كشف حساب مراكز التكلفة', icon: FileText, route: '/reports/cost-centers', category: 'التقارير' },
+    { id: 'cost_centers', name: 'دليل مراكز التكلفة والمشاريع', icon: Target, route: '/cost-centers', category: 'المحاسبة' },
+    { id: 'stock_transfers', name: 'مناقلات وحركات المستودعات', icon: ArrowLeftRight, route: '/stock-transfers', category: 'المخزون' },
+    { id: 'create_stock_transfer', name: 'تسجيل مناقلة مخزون جديدة', icon: ArrowLeftRight, route: '/stock-transfers/create', category: 'المخزون' },
+    { id: 'quotations', name: 'عروض الأسعار للعملاء', icon: FileSpreadsheet, route: '/quotations', category: 'المبيعات' },
+    { id: 'create_quotation', name: 'إنشاء عرض سعر جديد', icon: FileSpreadsheet, route: '/quotations/create', category: 'المبيعات' },
+    { id: 'fixed_assets', name: 'الأصول الثابتة والإهلاك', icon: Building2, route: '/fixed-assets', category: 'الأصول' },
+    { id: 'aging_report', name: 'تقرير أعمار الديون (Aging)', icon: LineChart, route: '/reports/aging', category: 'التقارير' },
+    { id: 'cost_centers_report', name: 'كشف حساب مراكز التكلفة', icon: LineChart, route: '/reports/cost-centers', category: 'التقارير' },
     { id: 'checks_report', name: 'تقرير حافظة الشيكات', icon: CreditCard, route: '/reports/checks', category: 'التقارير' },
     { id: 'stock_movement_report', name: 'كشف حركة وتقييم الأصناف', icon: Package, route: '/reports/stock-movement', category: 'التقارير' },
     { id: 'create_invoice', name: 'إنشاء فاتورة جديدة', icon: FileText, route: '/invoices/create', category: 'الفواتير' },
@@ -50,14 +65,14 @@ const allCommands = [
     { id: 'create_account', name: 'إضافة حساب جديد', icon: CreditCard, route: '/accounts/create', category: 'المحاسبة' },
     { id: 'parties', name: 'العملاء والموردين', icon: Users, route: '/parties', category: 'الجهات' },
     { id: 'items', name: 'الأصناف والمخزون', icon: Package, route: '/items', category: 'المخزون' },
-    { id: 'reports', name: 'جميع التقارير المالية', icon: FileText, route: '/reports', category: 'التقارير' },
-    { id: 'mcp_settings', name: 'اتصالات الذكاء الاصطناعي (MCP)', icon: Settings, route: '/settings/mcp', category: 'الإعدادات' },
+    { id: 'reports', name: 'جميع التقارير المالية', icon: LineChart, route: '/reports', category: 'التقارير' },
+    { id: 'mcp_settings', name: 'اتصالات الذكاء الاصطناعي (MCP)', icon: Bot, route: '/settings/mcp', category: 'الإعدادات' },
     { id: 'settings', name: 'إعدادات الحساب', icon: Settings, route: '/settings/profile', category: 'الإعدادات' },
 ];
 
 const filteredCommands = computed(() => {
     if (!searchQuery.value) return allCommands;
-    const q = searchQuery.value.toLowerCase();
+    const q = searchQuery.value.toLowerCase().trim();
     return allCommands.filter(c => c.name.toLowerCase().includes(q) || c.category.toLowerCase().includes(q));
 });
 
@@ -70,78 +85,67 @@ const executeCommand = (route: string) => {
 
 <template>
     <div v-if="isOpen" class="fixed inset-0 z-[100] flex items-start justify-center pt-[10vh] sm:pt-[15vh]">
-        <!-- Backdrop -->
-        <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm transition-opacity" @click="isOpen = false"></div>
+        <!-- High-Performance Dark Backdrop -->
+        <div class="fixed inset-0 bg-black/60 transition-opacity" @click="isOpen = false"></div>
         
-        <!-- Palette Modal -->
-        <div class="relative w-full max-w-2xl transform overflow-hidden rounded-3xl bg-white/90 dark:bg-gray-900/90 shadow-[0_0_50px_-12px_rgba(79,70,229,0.3)] ring-1 ring-black/5 transition-all backdrop-blur-2xl dark:ring-white/10"
+        <!-- Palette Modal Box (Zero Lag - Hardware Accelerated) -->
+        <div class="relative w-full max-w-2xl transform overflow-hidden rounded-2xl bg-card border border-border shadow-2xl transition-all"
              role="dialog" aria-modal="true" dir="rtl">
             
-            <!-- Glow Effect behind the modal -->
-            <div class="absolute -left-20 -top-20 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
-            <div class="absolute -right-20 -bottom-20 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl opacity-50 pointer-events-none"></div>
-            
-            <!-- Search Input -->
-            <div class="relative border-b border-gray-100 dark:border-gray-800/50 z-10">
-                <Search class="pointer-events-none absolute right-5 top-5 h-6 w-6 text-indigo-500" />
+            <!-- Search Input Bar -->
+            <div class="relative border-b border-border z-10 flex items-center bg-card">
+                <Search class="pointer-events-none absolute right-4 h-5 w-5 text-primary" />
                 <input
                     ref="searchInput"
                     v-model="searchQuery"
                     type="text"
-                    class="h-16 w-full bg-transparent pl-4 pr-16 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-0 text-lg border-0 outline-none"
-                    placeholder="ماذا تريد أن تفعل؟ (بحث عن صفحة، أو إجراء...)"
-                    role="combobox"
-                    aria-expanded="false"
-                    aria-controls="options"
+                    class="h-14 w-full bg-transparent pl-4 pr-12 text-foreground placeholder-muted-foreground focus:outline-none text-base border-0"
+                    placeholder="ماذا تريد أن تفعل؟ (ابحث عن صفحة، تقرير، أو سند...)"
                 />
-                <div class="absolute left-4 top-4 flex items-center gap-2">
-                    <span class="text-[10px] font-bold text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded shadow-inner">ESC</span>
+                <div class="absolute left-4 flex items-center gap-1">
+                    <span class="text-[11px] font-mono font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded border border-border">ESC</span>
                 </div>
             </div>
 
-            <!-- Results List -->
-            <div class="max-h-[60vh] scroll-py-3 overflow-y-auto p-3 z-10 relative">
-                <div v-if="filteredCommands.length > 0">
-                    <div class="space-y-2">
-                        <button
-                            v-for="(command, index) in filteredCommands"
-                            :key="command.id"
-                            @click="executeCommand(command.route)"
-                            class="group flex w-full items-center rounded-2xl p-3 text-right hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30 transition-all duration-200 focus:bg-indigo-50 outline-none transform hover:scale-[1.01]"
-                        >
-                            <div class="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 group-hover:from-indigo-200 group-hover:to-purple-200 dark:group-hover:from-indigo-800 dark:group-hover:to-purple-800 transition-colors shadow-sm">
-                                <component :is="command.icon" class="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                            </div>
-                            <div class="mr-4 flex-auto">
-                                <p class="text-base font-bold text-gray-900 dark:text-white group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
-                                    {{ command.name }}
-                                </p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">
-                                    {{ command.category }}
-                                </p>
-                            </div>
-                            <ArrowLeft class="h-5 w-5 text-gray-300 group-hover:text-indigo-500 ml-2 transition-transform group-hover:-translate-x-1" />
-                        </button>
-                    </div>
+            <!-- Optimized Scrollable List -->
+            <div class="max-h-[55vh] overflow-y-auto p-2 divide-y divide-border/40" style="-webkit-overflow-scrolling: touch; overscroll-behavior: contain;">
+                <div v-if="filteredCommands.length > 0" class="space-y-1">
+                    <button
+                        v-for="command in filteredCommands"
+                        :key="command.id"
+                        @click="executeCommand(command.route)"
+                        class="group flex w-full items-center rounded-xl p-2.5 text-right hover:bg-muted transition-colors outline-none"
+                    >
+                        <div class="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors">
+                            <component :is="command.icon" class="h-5 w-5" />
+                        </div>
+                        <div class="mr-3 flex-auto">
+                            <p class="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
+                                {{ command.name }}
+                            </p>
+                            <p class="text-xs text-muted-foreground mt-0.5">
+                                {{ command.category }}
+                            </p>
+                        </div>
+                        <ArrowLeft class="h-4 w-4 text-muted-foreground group-hover:text-primary ml-2 transition-transform group-hover:-translate-x-1" />
+                    </button>
                 </div>
 
                 <!-- Empty State -->
-                <div v-else class="px-6 py-16 text-center text-sm sm:px-14">
-                    <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 dark:bg-gray-800/50 border border-dashed border-gray-300 dark:border-gray-700">
-                        <Search class="h-8 w-8 text-gray-400" />
-                    </div>
-                    <p class="mt-4 text-lg font-bold text-gray-900 dark:text-white">لم يتم العثور على نتائج</p>
-                    <p class="mt-2 text-gray-500 dark:text-gray-400">لا يوجد أي تطابق مع بحثك "{{ searchQuery }}"</p>
+                <div v-else class="px-6 py-12 text-center text-sm">
+                    <Search class="h-8 w-8 text-muted-foreground mx-auto mb-2 opacity-50" />
+                    <p class="font-bold text-foreground">لم يتم العثور على نتائج</p>
+                    <p class="text-xs text-muted-foreground mt-1">لا يوجد أي تطابق مع بحثك "{{ searchQuery }}"</p>
                 </div>
             </div>
             
-            <!-- Footer Hints -->
-            <div class="bg-gray-50/50 dark:bg-gray-800/30 px-6 py-3 border-t border-gray-100 dark:border-gray-800/50 flex justify-between items-center text-xs text-gray-500 z-10 relative">
-                <div class="flex items-center gap-3">
-                    <span class="flex items-center gap-1">استخدم <kbd class="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded shadow-sm border border-gray-200 dark:border-gray-600 font-sans">↑</kbd> <kbd class="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded shadow-sm border border-gray-200 dark:border-gray-600 font-sans">↓</kbd> للتنقل</span>
-                    <span class="flex items-center gap-1">و <kbd class="bg-white dark:bg-gray-700 px-1.5 py-0.5 rounded shadow-sm border border-gray-200 dark:border-gray-600 font-sans">Enter</kbd> للاختيار</span>
+            <!-- Footer -->
+            <div class="bg-muted/50 px-4 py-2.5 border-t border-border flex justify-between items-center text-xs text-muted-foreground">
+                <div class="flex items-center gap-2">
+                    <span>استخدم <kbd class="bg-background px-1.5 py-0.5 rounded border border-border font-mono text-[10px]">↑</kbd> <kbd class="bg-background px-1.5 py-0.5 rounded border border-border font-mono text-[10px]">↓</kbd> للتنقل</span>
+                    <span>و <kbd class="bg-background px-1.5 py-0.5 rounded border border-border font-mono text-[10px]">Enter</kbd> للفتح</span>
                 </div>
-                <div>الوصول السريع للمشروع</div>
+                <div class="text-[11px] font-medium text-primary">نظام الأصيل للمحاسبة</div>
             </div>
         </div>
     </div>

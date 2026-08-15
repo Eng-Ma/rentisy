@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import NavFooter from '@/components/NavFooter.vue';
-import NavMain from '@/components/NavMain.vue';
+import NavMain, { type NavGroup } from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
 import { 
     LayoutGrid, 
@@ -19,90 +18,50 @@ import {
     Users, 
     Building2, 
     LineChart,
-    Bot,
-    Folder,
-    BookOpen
+    Bot
 } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
-const mainNavItems: NavItem[] = [
+const navGroups: NavGroup[] = [
     {
-        title: 'الرئيسية',
-        href: '/dashboard',
-        icon: LayoutGrid,
+        label: 'الرئيسية',
+        items: [
+            { title: 'لوحة التحكم', href: '/dashboard', icon: LayoutGrid },
+        ],
     },
     {
-        title: 'شجرة الحسابات',
-        href: '/accounts',
-        icon: BookKey,
+        label: 'المحاسبة والمالية (الأصيل)',
+        items: [
+            { title: 'شجرة الحسابات', href: '/accounts', icon: BookKey },
+            { title: 'سندات القبض والصرف', href: '/vouchers', icon: Receipt },
+            { title: 'حافظة الشيكات', href: '/checks', icon: CreditCard },
+            { title: 'القيود اليومية', href: '/journal-entries', icon: FileText },
+            { title: 'مراكز التكلفة والمشاريع', href: '/cost-centers', icon: Target },
+        ],
     },
     {
-        title: 'مراكز التكلفة',
-        href: '/cost-centers',
-        icon: Target,
+        label: 'المستودعات والمبيعات',
+        items: [
+            { title: 'الأصناف والمخزون', href: '/items', icon: Package },
+            { title: 'مناقلات وحركات المخزون', href: '/stock-transfers', icon: ArrowLeftRight },
+            { title: 'عروض الأسعار', href: '/quotations', icon: FileSpreadsheet },
+            { title: 'الفواتير والمبيعات', href: '/invoices', icon: ShoppingCart },
+            { title: 'العملاء والموردين', href: '/parties', icon: Users },
+        ],
     },
     {
-        title: 'القيود اليومية',
-        href: '/journal-entries',
-        icon: FileText,
-    },
-    {
-        title: 'سندات القبض والصرف',
-        href: '/vouchers',
-        icon: Receipt,
-    },
-    {
-        title: 'حافظة الشيكات',
-        href: '/checks',
-        icon: CreditCard,
-    },
-    {
-        title: 'الأصناف والمخزون',
-        href: '/items',
-        icon: Package,
-    },
-    {
-        title: 'مناقلات وحركات المخزون',
-        href: '/stock-transfers',
-        icon: ArrowLeftRight,
-    },
-    {
-        title: 'عروض الأسعار',
-        href: '/quotations',
-        icon: FileSpreadsheet,
-    },
-    {
-        title: 'الفواتير والمبيعات',
-        href: '/invoices',
-        icon: ShoppingCart,
-    },
-    {
-        title: 'العملاء والموردين',
-        href: '/parties',
-        icon: Users,
-    },
-    {
-        title: 'الأصول الثابتة',
-        href: '/fixed-assets',
-        icon: Building2,
-    },
-    {
-        title: 'التقارير المالية والأصيل',
-        href: '/reports',
-        icon: LineChart,
-    },
-    {
-        title: 'اتصالات الذكاء الاصطناعي (MCP)',
-        href: '/settings/mcp',
-        icon: Bot,
+        label: 'الأصول والتقارير والنظام',
+        items: [
+            { title: 'الأصول الثابتة والإهلاك', href: '/fixed-assets', icon: Building2 },
+            { title: 'التقارير المالية والأصيل', href: '/reports', icon: LineChart },
+            { title: 'اتصالات الذكاء الاصطناعي (MCP)', href: '/settings/mcp', icon: Bot },
+        ],
     },
 ];
-
-const footerNavItems: NavItem[] = [];
 </script>
 
 <template>
-    <Sidebar collapsible="icon" variant="inset">
+    <Sidebar collapsible="icon" variant="inset" class="border-l border-border">
         <SidebarHeader>
             <SidebarMenu>
                 <SidebarMenuItem>
@@ -115,8 +74,8 @@ const footerNavItems: NavItem[] = [];
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent>
-            <NavMain :items="mainNavItems" />
+        <SidebarContent class="overflow-y-auto" style="-webkit-overflow-scrolling: touch;">
+            <NavMain :groups="navGroups" />
         </SidebarContent>
 
         <SidebarFooter>

@@ -113,20 +113,25 @@ Route::match(['GET', 'POST', 'OPTIONS'], '/oauth/authorize', function (Illuminat
         return response('', 204)->header('Access-Control-Allow-Origin', $origin)->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')->header('Access-Control-Allow-Headers', '*');
     }
 
+    $redirectUri = $request->query('redirect_uri') ?? $request->input('redirect_uri') ?? session('mcp_oauth_redirect_uri');
+    $state = $request->query('state') ?? $request->input('state') ?? session('mcp_oauth_state');
+    $clientId = $request->query('client_id') ?? $request->input('client_id') ?? session('mcp_oauth_client_id');
+
     // Require Admin login for ChatGPT / MCP connection
     if (!auth()->check()) {
-        return redirect()->guest(route('login', ['return_url' => $request->fullUrl()]));
+        if ($redirectUri) {
+            session([
+                'mcp_oauth_redirect_uri' => $redirectUri,
+                'mcp_oauth_state' => $state,
+                'mcp_oauth_client_id' => $clientId,
+            ]);
+        }
+        return redirect()->guest(route('login'));
     }
 
-    $redirectUri = $request->query('redirect_uri') ?? $request->input('redirect_uri');
-    $state = $request->query('state') ?? $request->input('state');
-    $clientId = $request->query('client_id') ?? $request->input('client_id');
-
-    if ($request->isMethod('POST')) {
-        $approved = $request->boolean('approve', true);
-        if (!$approved && $redirectUri) {
-            return redirect()->away($redirectUri . '?error=access_denied&state=' . urlencode($state));
-        }
+    // Once authenticated as Admin, immediately issue OAuth code and redirect to ChatGPT
+    if ($redirectUri) {
+        session()->forget(['mcp_oauth_redirect_uri', 'mcp_oauth_state', 'mcp_oauth_client_id']);
 
         $authCode = 'code_' . Str::random(40);
         \Illuminate\Support\Facades\Cache::put('mcp_oauth_code_' . $authCode, [
@@ -134,24 +139,14 @@ Route::match(['GET', 'POST', 'OPTIONS'], '/oauth/authorize', function (Illuminat
             'client_id' => $clientId,
         ], 300);
 
-        if ($redirectUri) {
-            return redirect()->away($redirectUri . '?code=' . $authCode . '&state=' . urlencode($state));
+        $delimiter = str_contains($redirectUri, '?') ? '&' : '?';
+        $targetUrl = $redirectUri . $delimiter . 'code=' . $authCode . ($state ? '&state=' . urlencode((string)$state) : '');
+
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($targetUrl);
         }
 
-        return redirect()->route('settings.mcp')->with('success', 'تم تفويض الجلسة بنجاح');
-    }
-
-    if ($redirectUri) {
-        return Inertia::render('Auth/McpAuthorize', [
-            'clientId' => $clientId,
-            'redirectUri' => $redirectUri,
-            'state' => $state,
-            'user' => [
-                'id' => auth()->id(),
-                'name' => auth()->user()->name,
-                'email' => auth()->user()->email,
-            ],
-        ]);
+        return redirect()->away($targetUrl);
     }
 
     return redirect()->route('settings.mcp');
@@ -162,14 +157,15 @@ Route::post('/oauth/authorize/approve', function (Illuminate\Http\Request $reque
         return redirect()->route('login');
     }
 
-    $redirectUri = $request->input('redirect_uri');
-    $state = $request->input('state');
-    $clientId = $request->input('client_id');
+    $redirectUri = $request->input('redirect_uri') ?? session('mcp_oauth_redirect_uri');
+    $state = $request->input('state') ?? session('mcp_oauth_state');
+    $clientId = $request->input('client_id') ?? session('mcp_oauth_client_id');
     $approved = $request->boolean('approve', true);
 
     if (!$approved) {
         if ($redirectUri) {
-            return redirect()->away($redirectUri . '?error=access_denied&state=' . urlencode($state));
+            $delimiter = str_contains($redirectUri, '?') ? '&' : '?';
+            return redirect()->away($redirectUri . $delimiter . 'error=access_denied' . ($state ? '&state=' . urlencode((string)$state) : ''));
         }
         return redirect()->route('settings.mcp');
     }
@@ -181,7 +177,12 @@ Route::post('/oauth/authorize/approve', function (Illuminate\Http\Request $reque
     ], 300);
 
     if ($redirectUri) {
-        return redirect()->away($redirectUri . '?code=' . $authCode . '&state=' . urlencode($state));
+        $delimiter = str_contains($redirectUri, '?') ? '&' : '?';
+        $targetUrl = $redirectUri . $delimiter . 'code=' . $authCode . ($state ? '&state=' . urlencode((string)$state) : '');
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($targetUrl);
+        }
+        return redirect()->away($targetUrl);
     }
 
     return redirect()->route('settings.mcp')->with('success', 'تم التفويض بنجاح');

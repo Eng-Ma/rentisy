@@ -768,6 +768,14 @@ class AccountingTools
         return "Found " . $vouchers->count() . " vouchers:\n" . $vouchers->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
+    #[McpTool(name: 'get_voucher', description: 'Get full details of a single voucher by ID including party, accounts, cost center, and journal entry')]
+    public function getVoucher(int $id): string
+    {
+        $voucher = Voucher::with(['account', 'party', 'targetAccount', 'costCenter', 'currency', 'journalEntry.lines.account'])->find($id);
+        if (!$voucher) return "Error: Voucher with ID {$id} not found.";
+        return "Voucher #{$id} details:\n" . $voucher->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
     #[McpTool(name: 'create_voucher', description: 'Create a new Receipt or Payment voucher with automatic double-entry journal generation (type: receipt [سند قبض], payment [سند صرف])')]
     public function createVoucher(string $type, float $amount, string $paymentMethod = 'cash', ?int $accountId = null, ?int $partyId = null, ?int $targetAccountId = null, ?int $costCenterId = null, ?string $checkNumber = null, ?string $bankName = null, ?string $date = null, ?string $notes = null): string
     {
@@ -882,7 +890,115 @@ class AccountingTools
         }
     }
 
-    #[McpTool(name: 'delete_voucher', description: 'Delete a voucher by ID and revert its journal entry')]
+    #[McpTool(name: 'create_receipt_voucher', description: 'Quick tool to create a Receipt Voucher (سند قبض) to receive money with automatic balanced journal entry')]
+    public function createReceiptVoucher(float $amount, ?int $partyId = null, string $paymentMethod = 'cash', ?int $accountId = null, ?int $costCenterId = null, ?string $checkNumber = null, ?string $bankName = null, ?string $date = null, ?string $notes = null): string
+    {
+        return $this->createVoucher('receipt', $amount, $paymentMethod, $accountId, $partyId, null, $costCenterId, $checkNumber, $bankName, $date, $notes);
+    }
+
+    #[McpTool(name: 'create_payment_voucher', description: 'Quick tool to create a Payment Voucher (سند صرف) to pay money to a vendor or expense with automatic balanced journal entry')]
+    public function createPaymentVoucher(float $amount, ?int $partyId = null, ?int $targetAccountId = null, string $paymentMethod = 'cash', ?int $accountId = null, ?int $costCenterId = null, ?string $date = null, ?string $notes = null): string
+    {
+        return $this->createVoucher('payment', $amount, $paymentMethod, $accountId, $partyId, $targetAccountId, $costCenterId, null, null, $date, $notes);
+    }
+
+    #[McpTool(name: 'update_voucher', description: 'Update an existing voucher (سند قبض أو صرف) by ID and automatically synchronize its double-entry journal entry')]
+    public function updateVoucher(
+        int $id,
+        ?float $amount = null,
+        ?string $date = null,
+        ?string $paymentMethod = null,
+        ?int $accountId = null,
+        ?int $partyId = null,
+        ?int $targetAccountId = null,
+        ?int $costCenterId = null,
+        ?string $checkNumber = null,
+        ?string $bankName = null,
+        ?string $notes = null
+    ): string {
+        $voucher = Voucher::find($id);
+        if (!$voucher) return "Error: Voucher with ID {$id} not found.";
+
+        try {
+            DB::transaction(function () use ($voucher, $amount, $date, $paymentMethod, $accountId, $partyId, $targetAccountId, $costCenterId, $checkNumber, $bankName, $notes) {
+                if ($amount !== null) $voucher->amount = $amount;
+                if ($date !== null) $voucher->date = $date;
+                if ($paymentMethod !== null) $voucher->payment_method = $paymentMethod;
+                if ($accountId !== null) $voucher->account_id = $accountId;
+                if ($partyId !== null) $voucher->party_id = $partyId ?: null;
+                if ($targetAccountId !== null) $voucher->target_account_id = $targetAccountId;
+                if ($costCenterId !== null) $voucher->cost_center_id = $costCenterId;
+                if ($checkNumber !== null) $voucher->check_number = $checkNumber;
+                if ($bankName !== null) $voucher->bank_name = $bankName;
+                if ($notes !== null) $voucher->notes = $notes;
+
+                $voucher->save();
+
+                // Synchronize Journal Entry
+                if ($voucher->journal_entry_id) {
+                    $journalEntry = JournalEntry::find($voucher->journal_entry_id);
+                    if ($journalEntry) {
+                        $typeLabel = $voucher->type === 'receipt' ? 'سند قبض' : 'سند صرف';
+                        $journalEntry->update([
+                            'date' => $voucher->date,
+                            'description' => "{$typeLabel} رقم {$voucher->voucher_number} - " . ($voucher->notes ?? ''),
+                        ]);
+
+                        $journalEntry->lines()->delete();
+
+                        $accId = $voucher->account_id;
+                        $counterpartId = $voucher->target_account_id;
+                        if (!$counterpartId && $voucher->party_id) {
+                            $party = Party::find($voucher->party_id);
+                            $counterpartId = $party?->account_id ?? Account::where('code', $voucher->type === 'receipt' ? '1103' : '2101')->first()?->id;
+                        }
+                        if (!$counterpartId) $counterpartId = $accId;
+
+                        $amt = (float)$voucher->amount;
+                        $ccId = $voucher->cost_center_id;
+
+                        if ($voucher->type === 'receipt') {
+                            $journalEntry->lines()->create([
+                                'account_id' => $accId,
+                                'cost_center_id' => $ccId,
+                                'description' => "قبض نقدي/بنكي - {$voucher->voucher_number}",
+                                'debit' => $amt,
+                                'credit' => 0,
+                            ]);
+                            $journalEntry->lines()->create([
+                                'account_id' => $counterpartId,
+                                'cost_center_id' => $ccId,
+                                'description' => "تسديد/إيراد - {$voucher->voucher_number}",
+                                'debit' => 0,
+                                'credit' => $amt,
+                            ]);
+                        } else {
+                            $journalEntry->lines()->create([
+                                'account_id' => $counterpartId,
+                                'cost_center_id' => $ccId,
+                                'description' => "دفع/مصروف - {$voucher->voucher_number}",
+                                'debit' => $amt,
+                                'credit' => 0,
+                            ]);
+                            $journalEntry->lines()->create([
+                                'account_id' => $accId,
+                                'cost_center_id' => $ccId,
+                                'description' => "صرف نقدي/بنكي - {$voucher->voucher_number}",
+                                'debit' => 0,
+                                'credit' => $amt,
+                            ]);
+                        }
+                    }
+                }
+            });
+
+            return "Voucher #{$id} updated successfully:\n" . $voucher->fresh(['account', 'party', 'targetAccount', 'costCenter', 'journalEntry'])->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            return "Error updating voucher: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_voucher', description: 'Delete a voucher by ID and cleanly revert its associated journal entry and check')]
     public function deleteVoucher(int $id): string
     {
         $voucher = Voucher::find($id);

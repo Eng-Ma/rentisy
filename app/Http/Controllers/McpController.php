@@ -10,19 +10,67 @@ use Symfony\Component\Uid\Uuid;
 use Illuminate\Support\Facades\Cache;
 use App\MCP\AccountingTools;
 use App\MCP\LaravelSseTransport;
+use App\Models\McpToken;
 
 class McpController extends Controller
 {
     public function handle(ServerRequestInterface $psrRequest)
     {
+        $method = $psrRequest->getMethod();
+        $origin = $psrRequest->getHeaderLine('Origin') ?: '*';
+
+        if ($method === 'OPTIONS') {
+            return response('', 204)
+                ->header('Access-Control-Allow-Origin', $origin)
+                ->header('Access-Control-Allow-Credentials', 'true')
+                ->header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+                ->header('Access-Control-Allow-Headers', '*');
+        }
+
+        // Check authentication: Token verification or active Admin Web Session
+        $authHeader = $psrRequest->getHeaderLine('Authorization');
+        $token = null;
+
+        if (preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
+            $token = trim($matches[1]);
+        }
+
+        if (!$token) {
+            $queryParams = $psrRequest->getQueryParams();
+            $token = $queryParams['token'] ?? ($queryParams['api_key'] ?? null);
+        }
+
+        $isValid = false;
+        if ($token) {
+            $mcpToken = McpToken::where('token', $token)->where('is_active', true)->first();
+            if ($mcpToken) {
+                $isValid = true;
+                $mcpToken->update(['last_used_at' => now()]);
+            }
+        } elseif (auth()->check()) {
+            $isValid = true;
+        }
+
+        if (!$isValid) {
+            return response()->json([
+                'jsonrpc' => '2.0',
+                'error' => [
+                    'code' => -32000,
+                    'message' => 'Unauthorized. Admin authentication required to access MCP server. Please login from the Admin Panel or provide a valid Bearer token generated in Settings > MCP.',
+                ]
+            ], 401)
+            ->header('Content-Type', 'application/json')
+            ->header('Access-Control-Allow-Origin', $origin);
+        }
+
         $accountingTools = new AccountingTools();
         $sessionStore = new \App\MCP\LaravelCacheSessionStore();
 
-        // Build the server with full CRUD AccountingTools (Queries, Creates, Updates, Deletions)
-        $server = Server::builder()
-            ->setServerInfo('Laravel-Accounting-MCP', '2.0.0')
+        // Build the server with full CRUD and Al-Aseel Golden Tools
+        $serverBuilder = Server::builder()
+            ->setServerInfo('Laravel-Accounting-AlAseel-MCP', '3.0.0')
             ->setSession($sessionStore)
-            // Queries
+            // General Accounting & Queries
             ->addTool([$accountingTools, 'getAccounts'])
             ->addTool([$accountingTools, 'getInvoices'])
             ->addTool([$accountingTools, 'getBills'])
@@ -40,13 +88,12 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'createInvoice'])
             ->addTool([$accountingTools, 'createAccount'])
             ->addTool([$accountingTools, 'createJournalEntry'])
-            // Update Tools
+            // Updates & Deletes
             ->addTool([$accountingTools, 'updateParty'])
             ->addTool([$accountingTools, 'updateItem'])
             ->addTool([$accountingTools, 'updateStore'])
             ->addTool([$accountingTools, 'updateCategory'])
             ->addTool([$accountingTools, 'updateAccount'])
-            // Deletion Tools
             ->addTool([$accountingTools, 'deleteInvoice'])
             ->addTool([$accountingTools, 'deleteParty'])
             ->addTool([$accountingTools, 'deleteItem'])
@@ -54,11 +101,43 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'deleteCategory'])
             ->addTool([$accountingTools, 'deleteAccount'])
             ->addTool([$accountingTools, 'deleteJournalEntry'])
-            ->build();
+            // Al-Aseel Golden: Vouchers (سندات القبض والصرف)
+            ->addTool([$accountingTools, 'getVouchers'])
+            ->addTool([$accountingTools, 'createVoucher'])
+            ->addTool([$accountingTools, 'deleteVoucher'])
+            // Al-Aseel Golden: Checks Portfolio (حافظة الشيكات)
+            ->addTool([$accountingTools, 'getChecks'])
+            ->addTool([$accountingTools, 'createCheck'])
+            ->addTool([$accountingTools, 'updateCheckStatus'])
+            ->addTool([$accountingTools, 'collectCheck'])
+            ->addTool([$accountingTools, 'endorseCheck'])
+            // Al-Aseel Golden: Cost Centers (مراكز التكلفة)
+            ->addTool([$accountingTools, 'getCostCenters'])
+            ->addTool([$accountingTools, 'createCostCenter'])
+            ->addTool([$accountingTools, 'updateCostCenter'])
+            ->addTool([$accountingTools, 'deleteCostCenter'])
+            // Al-Aseel Golden: Stock Movements & Transfers (مناقلات وحركات المخزون)
+            ->addTool([$accountingTools, 'getStockTransfers'])
+            ->addTool([$accountingTools, 'createStockTransfer'])
+            ->addTool([$accountingTools, 'createStockAdjustment'])
+            // Al-Aseel Golden: Quotations (عروض الأسعار)
+            ->addTool([$accountingTools, 'getQuotations'])
+            ->addTool([$accountingTools, 'createQuotation'])
+            ->addTool([$accountingTools, 'convertQuotationToInvoice'])
+            // Al-Aseel Golden: Fixed Assets (الأصول الثابتة والإهلاك)
+            ->addTool([$accountingTools, 'getFixedAssets'])
+            ->addTool([$accountingTools, 'createFixedAsset'])
+            ->addTool([$accountingTools, 'calculateDepreciation'])
+            // Al-Aseel Golden: Advanced Reports (تقارير الأصيل المتقدمة)
+            ->addTool([$accountingTools, 'getAgingReport'])
+            ->addTool([$accountingTools, 'getCostCentersReport'])
+            ->addTool([$accountingTools, 'getChecksReport'])
+            ->addTool([$accountingTools, 'getInventoryValuationReport']);
+
+        $server = $serverBuilder->build();
 
         $transport = new LaravelSseTransport($psrRequest);
 
-        // Run the server on the transport which listens and handles the request
         return $server->run($transport);
     }
 }

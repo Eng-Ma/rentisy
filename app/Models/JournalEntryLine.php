@@ -8,6 +8,7 @@ class JournalEntryLine extends Model
 {
     protected $fillable = [
         'journal_entry_id',
+        'cost_center_id',
         'account_id',
         'description',
         'debit',
@@ -22,5 +23,10 @@ class JournalEntryLine extends Model
     public function account()
     {
         return $this->belongsTo(Account::class);
+    }
+
+    public function costCenter()
+    {
+        return $this->belongsTo(CostCenter::class);
     }
 }

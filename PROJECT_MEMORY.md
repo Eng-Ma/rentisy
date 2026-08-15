@@ -1,28 +1,51 @@
-# Project Memory: Accounting / Rentisy
+# Project Memory: Accounting / Rentisy (Al-Aseel Golden Edition)
 
 ## Project Overview
-This is a Laravel application integrated with Inertia.js and Vue 3 for an Accounting/Rentisy system.
+A complete enterprise-grade accounting and ERP system inspired by "Al-Aseel Al-Dhahabi" (برنامج الأصيل الذهبي للمحاسبة والمستودعات), built with Laravel 11+, Inertia.js, and Vue 3 with TypeScript, styled with Tailwind CSS, with native Model Context Protocol (MCP) server integration.
 
 ## Key Technologies
 - **Backend:** Laravel 11+ (PHP 8.2+)
-- **Frontend Framework:** Vue 3 with TypeScript
+- **Frontend Framework:** Vue 3 with TypeScript & Lucide Icons
 - **State/Routing Bridge:** Inertia.js (Vue 3 adapter)
-- **Styling:** Tailwind CSS, Radix Vue, Headless UI Vue
+- **Styling:** Tailwind CSS, Radix Vue
 - **Build Tool:** Vite
-- **Database/Seeders:** DatabaseSeeder, stores migration, JournalEntry and Account models are used.
+- **Database:** SQLite / MySQL / PostgreSQL with Eloquent ORM
 
 ## Git Configuration
 - **Remote URL:** `https://github.com/Eng-Ma/rentisy.git`
+- **Branch:** `main`
+
+## Core Modules (Al-Aseel Golden Feature Matrix)
+1. **General Accounting & Chart of Accounts (المحاسبة العامة وشجرة الحسابات)**:
+   - Multi-level Chart of Accounts (`Account`)
+   - Balanced Journal Entries (`JournalEntry`, `JournalEntryLine`)
+   - Currencies & Exchange Rates (`Currency`)
+2. **Receipt & Payment Vouchers (سندات القبض والصرف)**:
+   - Cash / Bank / Check vouchers with automated balanced double-entry accounting (`Voucher`).
+3. **Checks Portfolio & Management (حافظة الشيكات)**:
+   - Received and Issued Checks tracking (`Check`).
+   - Lifecycle: Under Collection, Deposited/Collected, Endorsed to Vendor, Returned/Bounced, Cancelled.
+4. **Cost Centers (مراكز التكلفة)**:
+   - Multi-level Cost Center tree (`CostCenter`) with line-level allocation across journals, vouchers, and invoices.
+5. **Inventory & Warehouse Management (المستودعات والمخزون)**:
+   - Multi-store catalog (`Item`, `Category`, `Store`, `StoreItem`).
+   - Stock Transfers, Adjustments, Stock-in / Stock-out (`StockTransfer`, `StockTransferLine`).
+6. **Sales & Purchases (المبيعات والمشتريات)**:
+   - Invoices (Cash/Credit sales, purchases, returns) (`Invoice`, `InvoiceLine`).
+   - Quotations & Price Offers with 1-click invoice conversion (`Quotation`, `QuotationLine`).
+7. **Fixed Assets & Depreciation (الأصول الثابتة والإهلاك)**:
+   - Fixed Asset register with automatic depreciation schedule & journal generation (`FixedAsset`, `AssetDepreciation`).
+8. **Al-Aseel Financial & Operational Reports (تقارير الأصيل المتقدمة)**:
+   - Account Statement (كشف حساب), Trial Balance (ميزان المراجعة), Income Statement (قائمة الدخل).
+   - Aging of Receivables & Payables (أعمار الديون).
+   - Cost Centers Statement (كشف مراكز التكلفة).
+   - Checks Portfolio Status (تقرير الشيكات).
+   - Item Stock Movement & Profitability (حركة الأصناف والربحية).
 
 ## MCP Server Configuration
 - **SSE Endpoint:** `https://rantisy.matajir.io/mcp/sse`
 - **Messages Endpoint:** `https://rantisy.matajir.io/mcp/messages`
 - **Controller:** `App\Http\Controllers\McpController`
-- **Transport:** `App\MCP\LaravelSseTransport`
-- **Tools (Full CRUD Suite):** `App\MCP\AccountingTools`
-  - **Read Queries:** `get_accounts`, `get_invoices`, `get_bills`, `get_system_status`, `get_parties`, `get_items`, `get_stores`, `get_categories`
-  - **Creation (Writes):** `create_customer`, `create_vendor`, `create_item`, `create_store`, `create_category`, `create_invoice`, `create_account`, `create_journal_entry`
-  - **Updates:** `update_party`, `update_item`, `update_store`, `update_category`, `update_account`
-  - **Deletions:** `delete_invoice`, `delete_party`, `delete_item`, `delete_store`, `delete_category`, `delete_account`, `delete_journal_entry`
-- **OAuth Discovery:** Endpoints configured in `routes/web.php` (`/.well-known/oauth-authorization-server`, `/oauth/authorize`, `/oauth/token`, `/oauth/register`)
-- **Transport Cache Store:** Must explicitly use `Cache::store('file')` across all send/receive methods so FPM POST and SSE workers communicate.
+- **Transport:** `App\MCP\LaravelSseTransport` (File Cache store)
+- **Tools Suite:** `App\MCP\AccountingTools`
+  - Complete read, write, update, delete, lifecycle, and reporting tools matching all system capabilities.

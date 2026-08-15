@@ -18,6 +18,10 @@ const sidebarNavItems: NavItem[] = [
         title: 'Appearance',
         href: '/settings/appearance',
     },
+    {
+        title: 'MCP / ChatGPT',
+        href: '/settings/mcp',
+    },
 ];
 
 const currentPath = window.location.pathname;

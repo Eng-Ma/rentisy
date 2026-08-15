@@ -12,6 +12,16 @@ use App\Models\StoreItem;
 use App\Models\JournalEntry;
 use App\Models\Currency;
 use App\Models\Category;
+use App\Models\CostCenter;
+use App\Models\Voucher;
+use App\Models\Check;
+use App\Models\StockTransfer;
+use App\Models\StockTransferLine;
+use App\Models\Quotation;
+use App\Models\QuotationLine;
+use App\Models\FixedAsset;
+use App\Models\AssetDepreciation;
+use App\Models\JournalEntryLine;
 use Illuminate\Support\Facades\DB;
 
 class AccountingTools
@@ -737,5 +747,856 @@ class AccountingTools
         } catch (\Throwable $e) {
             return "Error deleting journal entry #{$entryId}: " . $e->getMessage();
         }
+    }
+
+    // ==========================================
+    // --- AL-ASEEL GOLDEN: VOUCHERS (السندات) ---
+    // ==========================================
+
+    #[McpTool(name: 'get_vouchers', description: 'Get a list of receipt and payment vouchers (type: receipt, payment)')]
+    public function getVouchers(?string $type = null, int $limit = 20): string
+    {
+        $query = Voucher::with(['account', 'party', 'targetAccount', 'costCenter', 'currency'])
+            ->orderBy('date', 'desc');
+
+        if ($type) {
+            $query->where('type', $type);
+        }
+
+        $vouchers = $query->take($limit)->get();
+        if ($vouchers->isEmpty()) return "No vouchers found.";
+        return "Found " . $vouchers->count() . " vouchers:\n" . $vouchers->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_voucher', description: 'Create a new Receipt or Payment voucher with automatic double-entry journal generation (type: receipt [سند قبض], payment [سند صرف])')]
+    public function createVoucher(string $type, float $amount, string $paymentMethod = 'cash', ?int $accountId = null, ?int $partyId = null, ?int $targetAccountId = null, ?int $costCenterId = null, ?string $checkNumber = null, ?string $bankName = null, ?string $date = null, ?string $notes = null): string
+    {
+        if (!in_array($type, ['receipt', 'payment'])) {
+            return "Error: Invalid voucher type. Must be 'receipt' or 'payment'.";
+        }
+
+        $party = $partyId ? Party::find($partyId) : null;
+        $account = $accountId ? Account::find($accountId) : (Account::where('code', $paymentMethod === 'cash' ? '1101' : '1102')->first() ?? Account::first());
+        $currency = Currency::where('is_default', true)->first() ?? Currency::first();
+
+        if (!$account) {
+            return "Error: No valid cash or bank account found.";
+        }
+
+        $prefix = $type === 'receipt' ? 'RV-' : 'PV-';
+        $lastVoucher = Voucher::where('type', $type)->latest('id')->first();
+        $nextNum = $lastVoucher ? ((int)substr($lastVoucher->voucher_number, 3) + 1) : 1;
+        $voucherNumber = $prefix . str_pad((string)$nextNum, 5, '0', STR_PAD_LEFT);
+
+        $voucherDate = $date ?? date('Y-m-d');
+        $counterpartAccountId = $targetAccountId;
+        if (!$counterpartAccountId && $party) {
+            $counterpartAccountId = $party->account_id ?? Account::where('code', $type === 'receipt' ? '1103' : '2101')->first()?->id;
+        }
+
+        try {
+            $voucher = DB::transaction(function () use ($type, $amount, $paymentMethod, $account, $party, $counterpartAccountId, $costCenterId, $currency, $voucherNumber, $voucherDate, $checkNumber, $bankName, $notes) {
+                $typeLabel = $type === 'receipt' ? 'سند قبض' : 'سند صرف';
+
+                $journalEntry = JournalEntry::create([
+                    'date' => $voucherDate,
+                    'reference' => $voucherNumber,
+                    'description' => "{$typeLabel} رقم {$voucherNumber} - " . ($notes ?? ''),
+                    'currency_id' => $currency->id,
+                    'exchange_rate' => 1.0,
+                ]);
+
+                if ($type === 'receipt') {
+                    $journalEntry->lines()->create([
+                        'account_id' => $account->id,
+                        'cost_center_id' => $costCenterId,
+                        'description' => "قبض نقدي/بنكي - {$voucherNumber}",
+                        'debit' => $amount,
+                        'credit' => 0,
+                    ]);
+                    $journalEntry->lines()->create([
+                        'account_id' => $counterpartAccountId ?? $account->id,
+                        'cost_center_id' => $costCenterId,
+                        'description' => "تسديد/إيراد - {$voucherNumber}",
+                        'debit' => 0,
+                        'credit' => $amount,
+                    ]);
+                } else {
+                    $journalEntry->lines()->create([
+                        'account_id' => $counterpartAccountId ?? $account->id,
+                        'cost_center_id' => $costCenterId,
+                        'description' => "دفع/مصروف - {$voucherNumber}",
+                        'debit' => $amount,
+                        'credit' => 0,
+                    ]);
+                    $journalEntry->lines()->create([
+                        'account_id' => $account->id,
+                        'cost_center_id' => $costCenterId,
+                        'description' => "صرف نقدي/بنكي - {$voucherNumber}",
+                        'debit' => 0,
+                        'credit' => $amount,
+                    ]);
+                }
+
+                $voucher = Voucher::create([
+                    'voucher_number' => $voucherNumber,
+                    'type' => $type,
+                    'payment_method' => $paymentMethod,
+                    'date' => $voucherDate,
+                    'account_id' => $account->id,
+                    'party_id' => $party?->id,
+                    'target_account_id' => $counterpartAccountId,
+                    'cost_center_id' => $costCenterId,
+                    'currency_id' => $currency->id,
+                    'exchange_rate' => 1.0,
+                    'amount' => $amount,
+                    'check_number' => $checkNumber,
+                    'bank_name' => $bankName,
+                    'notes' => $notes,
+                    'journal_entry_id' => $journalEntry->id,
+                ]);
+
+                if ($paymentMethod === 'check' && !empty($checkNumber)) {
+                    Check::create([
+                        'check_number' => $checkNumber,
+                        'type' => $type === 'receipt' ? 'received' : 'issued',
+                        'bank_name' => $bankName ?? 'البنك',
+                        'due_date' => $voucherDate,
+                        'issue_date' => $voucherDate,
+                        'amount' => $amount,
+                        'currency_id' => $currency->id,
+                        'status' => 'under_collection',
+                        'party_id' => $party?->id,
+                        'voucher_id' => $voucher->id,
+                        'journal_entry_id' => $journalEntry->id,
+                        'notes' => $notes,
+                    ]);
+                }
+
+                return $voucher->load(['account', 'party', 'targetAccount', 'costCenter', 'journalEntry']);
+            });
+
+            return "Voucher created successfully with ID {$voucher->id}:\n" . $voucher->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            return "Error creating voucher: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'delete_voucher', description: 'Delete a voucher by ID and revert its journal entry')]
+    public function deleteVoucher(int $id): string
+    {
+        $voucher = Voucher::find($id);
+        if (!$voucher) return "Error: Voucher with ID {$id} not found.";
+
+        try {
+            DB::transaction(function () use ($voucher) {
+                Check::where('voucher_id', $voucher->id)->delete();
+                if ($voucher->journal_entry_id) {
+                    $entry = JournalEntry::find($voucher->journal_entry_id);
+                    if ($entry) {
+                        $entry->lines()->delete();
+                        $entry->delete();
+                    }
+                }
+                $voucher->delete();
+            });
+
+            return "Voucher #{$id} and its associated records deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting voucher: " . $e->getMessage();
+        }
+    }
+
+    // ==========================================
+    // --- AL-ASEEL GOLDEN: CHECKS (الشيكات) ---
+    // ==========================================
+
+    #[McpTool(name: 'get_checks', description: 'Get a list of checks in portfolio (type: received, issued; status: under_collection, collected, endorsed, bounced, cancelled)')]
+    public function getChecks(?string $type = null, ?string $status = null, int $limit = 20): string
+    {
+        $query = Check::with(['party', 'endorsedParty', 'currency'])->orderBy('due_date', 'asc');
+
+        if ($type) $query->where('type', $type);
+        if ($status) $query->where('status', $status);
+
+        $checks = $query->take($limit)->get();
+        if ($checks->isEmpty()) return "No checks found matching criteria.";
+        return "Found " . $checks->count() . " checks:\n" . $checks->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_check', description: 'Create a new check in the checks portfolio')]
+    public function createCheck(string $checkNumber, string $type, float $amount, string $bankName, string $dueDate, ?int $partyId = null, ?string $drawerName = null, ?string $notes = null): string
+    {
+        $currency = Currency::where('is_default', true)->first() ?? Currency::first();
+
+        $check = Check::create([
+            'check_number' => $checkNumber,
+            'type' => in_array($type, ['received', 'issued']) ? $type : 'received',
+            'bank_name' => $bankName,
+            'drawer_name' => $drawerName,
+            'due_date' => $dueDate,
+            'issue_date' => date('Y-m-d'),
+            'amount' => $amount,
+            'currency_id' => $currency->id,
+            'status' => 'under_collection',
+            'party_id' => $partyId,
+            'notes' => $notes,
+        ]);
+
+        return "Check created successfully with ID {$check->id}:\n" . $check->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_check_status', description: 'Update status of a check (under_collection, collected, endorsed, bounced, cancelled)')]
+    public function updateCheckStatus(int $id, string $status, ?int $bankAccountId = null, ?int $endorsedPartyId = null, ?string $notes = null): string
+    {
+        $check = Check::find($id);
+        if (!$check) return "Error: Check with ID {$id} not found.";
+
+        if ($status === 'collected') {
+            return $this->collectCheck($id, $bankAccountId);
+        } elseif ($status === 'endorsed' && $endorsedPartyId) {
+            return $this->endorseCheck($id, $endorsedPartyId);
+        }
+
+        $check->update([
+            'status' => $status,
+            'notes' => $notes ?? $check->notes,
+        ]);
+
+        return "Check #{$id} status updated to '{$status}'.\n" . $check->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'collect_check', description: 'Collect/deposit a received check into a bank account with automated journal entry')]
+    public function collectCheck(int $id, ?int $bankAccountId = null): string
+    {
+        $check = Check::find($id);
+        if (!$check) return "Error: Check with ID {$id} not found.";
+
+        $bankAccount = $bankAccountId ? Account::find($bankAccountId) : (Account::where('code', '1102')->first() ?? Account::first());
+
+        try {
+            DB::transaction(function () use ($check, $bankAccount) {
+                $check->status = 'collected';
+                $check->collection_date = date('Y-m-d');
+
+                if ($bankAccount && $check->type === 'received') {
+                    $entry = JournalEntry::create([
+                        'date' => date('Y-m-d'),
+                        'reference' => 'CHK-COL-' . $check->check_number,
+                        'description' => "تحصيل شيك وارد رقم {$check->check_number}",
+                        'currency_id' => $check->currency_id,
+                        'exchange_rate' => 1.0,
+                    ]);
+
+                    $entry->lines()->create([
+                        'account_id' => $bankAccount->id,
+                        'description' => "إيداع وتحصيل شيك {$check->check_number}",
+                        'debit' => $check->amount,
+                        'credit' => 0,
+                    ]);
+
+                    $bufferAccount = Account::where('code', '1101')->first() ?? $bankAccount;
+                    $entry->lines()->create([
+                        'account_id' => $bufferAccount->id,
+                        'description' => "تحصيل شيك من الخزينة {$check->check_number}",
+                        'debit' => 0,
+                        'credit' => $check->amount,
+                    ]);
+
+                    $check->journal_entry_id = $entry->id;
+                }
+
+                $check->save();
+            });
+
+            return "Check #{$id} collected successfully into Bank account #{$bankAccount->id}.";
+        } catch (\Throwable $e) {
+            return "Error collecting check: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'endorse_check', description: 'Endorse a received check to a vendor with automated debt payment journal entry')]
+    public function endorseCheck(int $id, int $endorsedPartyId): string
+    {
+        $check = Check::find($id);
+        if (!$check) return "Error: Check with ID {$id} not found.";
+
+        $party = Party::find($endorsedPartyId);
+        if (!$party) return "Error: Vendor/Party with ID {$endorsedPartyId} not found.";
+
+        try {
+            DB::transaction(function () use ($check, $party) {
+                $check->status = 'endorsed';
+                $check->endorsed_party_id = $party->id;
+
+                $vendorAccount = $party->account_id ?? Account::where('code', '2101')->first()?->id;
+                if ($vendorAccount) {
+                    $entry = JournalEntry::create([
+                        'date' => date('Y-m-d'),
+                        'reference' => 'CHK-END-' . $check->check_number,
+                        'description' => "تجيير شيك رقم {$check->check_number} إلى {$party->name}",
+                        'currency_id' => $check->currency_id,
+                        'exchange_rate' => 1.0,
+                    ]);
+
+                    $entry->lines()->create([
+                        'account_id' => $vendorAccount,
+                        'description' => "سداد بتجيير شيك {$check->check_number}",
+                        'debit' => $check->amount,
+                        'credit' => 0,
+                    ]);
+
+                    $bufferAccount = Account::where('code', '1101')->first()?->id ?? $vendorAccount;
+                    $entry->lines()->create([
+                        'account_id' => $bufferAccount,
+                        'description' => "تجيير شيك برسم التحصيل {$check->check_number}",
+                        'debit' => 0,
+                        'credit' => $check->amount,
+                    ]);
+
+                    $check->journal_entry_id = $entry->id;
+                }
+
+                $check->save();
+            });
+
+            return "Check #{$id} endorsed successfully to {$party->name}.";
+        } catch (\Throwable $e) {
+            return "Error endorsing check: " . $e->getMessage();
+        }
+    }
+
+    // ===============================================
+    // --- AL-ASEEL GOLDEN: COST CENTERS (مراكز التكلفة) ---
+    // ===============================================
+
+    #[McpTool(name: 'get_cost_centers', description: 'Get a list of all cost centers')]
+    public function getCostCenters(): string
+    {
+        $costCenters = CostCenter::with('parent')->orderBy('code')->get();
+        if ($costCenters->isEmpty()) return "No cost centers found.";
+        return "Found " . $costCenters->count() . " cost centers:\n" . $costCenters->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_cost_center', description: 'Create a new cost center in the cost centers tree')]
+    public function createCostCenter(string $code, string $name, ?int $parentId = null, ?string $description = null): string
+    {
+        $cc = CostCenter::create([
+            'code' => $code,
+            'name' => $name,
+            'parent_id' => $parentId,
+            'description' => $description,
+            'is_active' => true,
+        ]);
+
+        return "Cost center created successfully with ID {$cc->id}:\n" . $cc->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_cost_center', description: 'Update an existing cost center by ID')]
+    public function updateCostCenter(int $id, ?string $name = null, ?string $code = null, ?int $parentId = null, ?bool $isActive = null): string
+    {
+        $cc = CostCenter::find($id);
+        if (!$cc) return "Error: Cost center with ID {$id} not found.";
+
+        $data = array_filter([
+            'name' => $name,
+            'code' => $code,
+            'parent_id' => $parentId,
+            'is_active' => $isActive,
+        ], fn($v) => $v !== null);
+
+        $cc->update($data);
+        return "Cost center #{$id} updated successfully:\n" . $cc->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'delete_cost_center', description: 'Delete a cost center by ID')]
+    public function deleteCostCenter(int $id): string
+    {
+        $cc = CostCenter::find($id);
+        if (!$cc) return "Error: Cost center with ID {$id} not found.";
+
+        try {
+            $cc->delete();
+            return "Cost center #{$id} deleted successfully.";
+        } catch (\Throwable $e) {
+            return "Error deleting cost center: " . $e->getMessage();
+        }
+    }
+
+    // ====================================================
+    // --- AL-ASEEL GOLDEN: STOCK TRANSFERS (حركات المخزون) ---
+    // ====================================================
+
+    #[McpTool(name: 'get_stock_transfers', description: 'Get a list of stock transfers and adjustments (type: transfer, stock_in, stock_out, adjustment)')]
+    public function getStockTransfers(?string $type = null, int $limit = 20): string
+    {
+        $query = StockTransfer::with(['fromStore', 'toStore', 'lines.item'])->orderBy('date', 'desc');
+
+        if ($type) $query->where('type', $type);
+
+        $transfers = $query->take($limit)->get();
+        if ($transfers->isEmpty()) return "No stock transfers found.";
+        return "Found " . $transfers->count() . " stock transfers:\n" . $transfers->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_stock_transfer', description: 'Transfer items between two warehouses with automatic inventory stock updates')]
+    public function createStockTransfer(int $fromStoreId, int $toStoreId, mixed $linesJson, ?string $date = null, ?string $notes = null): string
+    {
+        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson, true) ?? []);
+        if (empty($linesData)) {
+            $item = Item::first();
+            if (!$item) return "Error: No items available in catalog.";
+            $linesData = [['item_id' => $item->id, 'quantity' => 5, 'unit_cost' => (float)$item->purchase_price]];
+        }
+
+        $lastTransfer = StockTransfer::latest('id')->first();
+        $nextNum = $lastTransfer ? ((int)substr($lastTransfer->transfer_number, 3) + 1) : 1;
+        $transferNumber = 'TR-' . str_pad((string)$nextNum, 5, '0', STR_PAD_LEFT);
+
+        try {
+            $transfer = DB::transaction(function () use ($fromStoreId, $toStoreId, $linesData, $transferNumber, $date, $notes) {
+                $transfer = StockTransfer::create([
+                    'transfer_number' => $transferNumber,
+                    'type' => 'transfer',
+                    'from_store_id' => $fromStoreId,
+                    'to_store_id' => $toStoreId,
+                    'date' => $date ?? date('Y-m-d'),
+                    'notes' => $notes,
+                    'status' => 'completed',
+                ]);
+
+                foreach ($linesData as $line) {
+                    $transfer->lines()->create([
+                        'item_id' => $line['item_id'],
+                        'quantity' => (float)$line['quantity'],
+                        'unit_cost' => (float)($line['unit_cost'] ?? 0),
+                    ]);
+
+                    $qty = (float)$line['quantity'];
+
+                    $from = StoreItem::firstOrCreate(['store_id' => $fromStoreId, 'item_id' => $line['item_id']], ['quantity' => 0]);
+                    $from->quantity -= $qty;
+                    $from->save();
+
+                    $to = StoreItem::firstOrCreate(['store_id' => $toStoreId, 'item_id' => $line['item_id']], ['quantity' => 0]);
+                    $to->quantity += $qty;
+                    $to->save();
+                }
+
+                return $transfer->load(['fromStore', 'toStore', 'lines.item']);
+            });
+
+            return "Stock transfer created successfully with ID {$transfer->id}:\n" . $transfer->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            return "Error creating stock transfer: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'create_stock_adjustment', description: 'Make a stock adjustment or stock-in/stock-out in a store')]
+    public function createStockAdjustment(int $storeId, mixed $linesJson, ?string $date = null, ?string $notes = null): string
+    {
+        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson, true) ?? []);
+        if (empty($linesData)) return "Error: lines data is required for stock adjustment.";
+
+        $lastTransfer = StockTransfer::latest('id')->first();
+        $nextNum = $lastTransfer ? ((int)substr($lastTransfer->transfer_number, 3) + 1) : 1;
+        $transferNumber = 'ADJ-' . str_pad((string)$nextNum, 5, '0', STR_PAD_LEFT);
+
+        try {
+            $transfer = DB::transaction(function () use ($storeId, $linesData, $transferNumber, $date, $notes) {
+                $transfer = StockTransfer::create([
+                    'transfer_number' => $transferNumber,
+                    'type' => 'adjustment',
+                    'to_store_id' => $storeId,
+                    'date' => $date ?? date('Y-m-d'),
+                    'notes' => $notes,
+                    'status' => 'completed',
+                ]);
+
+                foreach ($linesData as $line) {
+                    $qty = (float)$line['quantity'];
+                    $transfer->lines()->create([
+                        'item_id' => $line['item_id'],
+                        'quantity' => $qty,
+                        'unit_cost' => (float)($line['unit_cost'] ?? 0),
+                    ]);
+
+                    $storeItem = StoreItem::firstOrCreate(['store_id' => $storeId, 'item_id' => $line['item_id']], ['quantity' => 0]);
+                    $storeItem->quantity += $qty;
+                    $storeItem->save();
+                }
+
+                return $transfer->load(['toStore', 'lines.item']);
+            });
+
+            return "Stock adjustment completed successfully:\n" . $transfer->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            return "Error adjusting stock: " . $e->getMessage();
+        }
+    }
+
+    // =============================================
+    // --- AL-ASEEL GOLDEN: QUOTATIONS (عروض الأسعار) ---
+    // =============================================
+
+    #[McpTool(name: 'get_quotations', description: 'Get a list of customer price quotations')]
+    public function getQuotations(?string $status = null, int $limit = 20): string
+    {
+        $query = Quotation::with(['party', 'store', 'lines.item'])->orderBy('date', 'desc');
+        if ($status) $query->where('status', $status);
+
+        $quotes = $query->take($limit)->get();
+        if ($quotes->isEmpty()) return "No quotations found.";
+        return "Found " . $quotes->count() . " quotations:\n" . $quotes->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_quotation', description: 'Create a new price quotation / offer for a customer')]
+    public function createQuotation(int $partyId, mixed $linesJson, ?int $storeId = null, float $discount = 0, ?string $date = null, ?string $expiryDate = null, ?string $notes = null): string
+    {
+        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson, true) ?? []);
+        if (empty($linesData)) {
+            $item = Item::first();
+            if (!$item) return "Error: No items available in catalog.";
+            $linesData = [['item_id' => $item->id, 'quantity' => 1, 'unit_price' => (float)$item->sales_price]];
+        }
+
+        $lastQuote = Quotation::latest('id')->first();
+        $nextNum = $lastQuote ? ((int)substr($lastQuote->quotation_number, 4) + 1) : 1;
+        $quotationNumber = 'QTN-' . str_pad((string)$nextNum, 5, '0', STR_PAD_LEFT);
+
+        try {
+            $quote = DB::transaction(function () use ($partyId, $storeId, $linesData, $discount, $quotationNumber, $date, $expiryDate, $notes) {
+                $subtotal = 0;
+                $processedLines = [];
+
+                foreach ($linesData as $line) {
+                    $qty = (float)$line['quantity'];
+                    $price = (float)$line['unit_price'];
+                    $total = $qty * $price;
+                    $subtotal += $total;
+
+                    $processedLines[] = [
+                        'item_id' => $line['item_id'],
+                        'quantity' => $qty,
+                        'unit_price' => $price,
+                        'total_price' => $total,
+                    ];
+                }
+
+                $totalAmount = max(0, $subtotal - $discount);
+
+                $quotation = Quotation::create([
+                    'quotation_number' => $quotationNumber,
+                    'party_id' => $partyId,
+                    'store_id' => $storeId,
+                    'date' => $date ?? date('Y-m-d'),
+                    'expiry_date' => $expiryDate,
+                    'status' => 'draft',
+                    'subtotal' => $subtotal,
+                    'discount' => $discount,
+                    'total_amount' => $totalAmount,
+                    'notes' => $notes,
+                ]);
+
+                foreach ($processedLines as $pLine) {
+                    $quotation->lines()->create($pLine);
+                }
+
+                return $quotation->load(['party', 'store', 'lines.item']);
+            });
+
+            return "Quotation created successfully with ID {$quote->id}:\n" . $quote->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        } catch (\Throwable $e) {
+            return "Error creating quotation: " . $e->getMessage();
+        }
+    }
+
+    #[McpTool(name: 'convert_quotation_to_invoice', description: 'Convert a price quotation into a confirmed sales invoice with automated stock deduction and accounting entries')]
+    public function convertQuotationToInvoice(int $id): string
+    {
+        $quotation = Quotation::with(['party', 'lines.item'])->find($id);
+        if (!$quotation) return "Error: Quotation with ID {$id} not found.";
+        if ($quotation->status === 'converted') return "Error: Quotation is already converted into invoice #{$quotation->converted_invoice_id}.";
+
+        try {
+            $invoice = DB::transaction(function () use ($quotation) {
+                $storeId = $quotation->store_id ?? Store::first()?->id;
+                $totalAmount = $quotation->total_amount;
+                $totalCost = 0;
+
+                $invoice = Invoice::create([
+                    'type' => 'sale',
+                    'date' => date('Y-m-d'),
+                    'party_id' => $quotation->party_id,
+                    'store_id' => $storeId,
+                    'total_amount' => $totalAmount,
+                    'notes' => "Converted from Quotation #{$quotation->quotation_number}",
+                ]);
+
+                foreach ($quotation->lines as $line) {
+                    $itemCost = (float)($line->item ? $line->item->purchase_price : 0);
+                    $totalCost += $line->quantity * $itemCost;
+
+                    $invoice->lines()->create([
+                        'item_id' => $line->item_id,
+                        'quantity' => $line->quantity,
+                        'unit_price' => $line->unit_price,
+                        'total_price' => $line->total_price,
+                    ]);
+
+                    if ($storeId) {
+                        $storeItem = StoreItem::firstOrCreate(['store_id' => $storeId, 'item_id' => $line->item_id], ['quantity' => 0]);
+                        $storeItem->quantity -= $line->quantity;
+                        $storeItem->save();
+                    }
+                }
+
+                $currency = Currency::where('is_default', true)->first() ?? Currency::first();
+                $party = $quotation->party;
+                $partyAccount = $party->account_id ?? Account::where('code', '1103')->first()?->id;
+                $salesAccount = Account::where('code', '4101')->first()?->id;
+                $cogsAccount = Account::where('code', '5101')->first()?->id;
+                $inventoryAccount = Account::where('code', '1104')->first()?->id;
+
+                if ($partyAccount && $currency) {
+                    $journalEntry = JournalEntry::create([
+                        'date' => date('Y-m-d'),
+                        'description' => "فاتورة مبيعات محولة من عرض سعر {$quotation->quotation_number}",
+                        'reference' => 'INV-' . $invoice->id,
+                        'currency_id' => $currency->id,
+                        'exchange_rate' => 1.0,
+                    ]);
+
+                    $journalEntry->lines()->create(['account_id' => $partyAccount, 'debit' => $totalAmount, 'credit' => 0]);
+                    if ($salesAccount) $journalEntry->lines()->create(['account_id' => $salesAccount, 'debit' => 0, 'credit' => $totalAmount]);
+                    if ($cogsAccount && $inventoryAccount && $totalCost > 0) {
+                        $journalEntry->lines()->create(['account_id' => $cogsAccount, 'debit' => $totalCost, 'credit' => 0]);
+                        $journalEntry->lines()->create(['account_id' => $inventoryAccount, 'debit' => 0, 'credit' => $totalCost]);
+                    }
+
+                    $invoice->update(['journal_entry_id' => $journalEntry->id]);
+                }
+
+                $quotation->update(['status' => 'converted', 'converted_invoice_id' => $invoice->id]);
+                return $invoice;
+            });
+
+            return "Quotation #{$id} converted successfully to Sales Invoice #{$invoice->id}.";
+        } catch (\Throwable $e) {
+            return "Error converting quotation: " . $e->getMessage();
+        }
+    }
+
+    // ===============================================
+    // --- AL-ASEEL GOLDEN: FIXED ASSETS (الأصول الثابتة) ---
+    // ===============================================
+
+    #[McpTool(name: 'get_fixed_assets', description: 'Get a list of fixed assets and their depreciation status')]
+    public function getFixedAssets(): string
+    {
+        $assets = FixedAsset::with(['assetAccount', 'costCenter', 'depreciations'])->get();
+        if ($assets->isEmpty()) return "No fixed assets found.";
+        return "Found " . $assets->count() . " fixed assets:\n" . $assets->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_fixed_asset', description: 'Create a new fixed asset record')]
+    public function createFixedAsset(string $code, string $name, float $purchaseCost, ?string $purchaseDate = null, float $usefulLifeYears = 5, float $salvageValue = 0, ?int $assetAccountId = null, ?int $costCenterId = null): string
+    {
+        $rate = $usefulLifeYears > 0 ? (100 / $usefulLifeYears) : 20;
+
+        $asset = FixedAsset::create([
+            'code' => $code,
+            'name' => $name,
+            'purchase_date' => $purchaseDate ?? date('Y-m-d'),
+            'purchase_cost' => $purchaseCost,
+            'salvage_value' => $salvageValue,
+            'useful_life_years' => $usefulLifeYears,
+            'depreciation_rate' => $rate,
+            'depreciation_method' => 'straight_line',
+            'asset_account_id' => $assetAccountId,
+            'cost_center_id' => $costCenterId,
+            'total_depreciated' => 0,
+            'current_book_value' => $purchaseCost,
+            'is_active' => true,
+        ]);
+
+        return "Fixed asset created successfully with ID {$asset->id}:\n" . $asset->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'calculate_depreciation', description: 'Calculate and post periodic depreciation for a fixed asset with automated journal entry')]
+    public function calculateDepreciation(int $id, ?float $amount = null, ?string $date = null): string
+    {
+        $asset = FixedAsset::find($id);
+        if (!$asset) return "Error: Fixed asset with ID {$id} not found.";
+
+        $depreciationAmount = $amount;
+        if (!$depreciationAmount) {
+            $base = max(0, $asset->purchase_cost - $asset->salvage_value);
+            $depreciationAmount = round($base * ($asset->depreciation_rate / 100), 2);
+        }
+
+        if ($asset->current_book_value - $depreciationAmount < $asset->salvage_value) {
+            $depreciationAmount = max(0, $asset->current_book_value - $asset->salvage_value);
+        }
+
+        if ($depreciationAmount <= 0) {
+            return "Error: Asset is already fully depreciated down to its salvage value.";
+        }
+
+        try {
+            DB::transaction(function () use ($asset, $depreciationAmount, $date) {
+                $depDate = $date ?? date('Y-m-d');
+                $currency = Currency::where('is_default', true)->first() ?? Currency::first();
+                $expenseAcc = $asset->depreciation_expense_account_id ?? Account::where('code', '5201')->first()?->id;
+                $accumulatedAcc = $asset->accumulated_depreciation_account_id ?? $asset->asset_account_id;
+
+                $entry = null;
+                if ($expenseAcc && $accumulatedAcc && $currency) {
+                    $entry = JournalEntry::create([
+                        'date' => $depDate,
+                        'reference' => 'DEP-' . $asset->code,
+                        'description' => "إهلاك أصل ثابت: {$asset->name}",
+                        'currency_id' => $currency->id,
+                        'exchange_rate' => 1.0,
+                    ]);
+
+                    $entry->lines()->create([
+                        'account_id' => $expenseAcc,
+                        'cost_center_id' => $asset->cost_center_id,
+                        'description' => "مصروف إهلاك {$asset->name}",
+                        'debit' => $depreciationAmount,
+                        'credit' => 0,
+                    ]);
+
+                    $entry->lines()->create([
+                        'account_id' => $accumulatedAcc,
+                        'cost_center_id' => $asset->cost_center_id,
+                        'description' => "مجمع إهلاك {$asset->name}",
+                        'debit' => 0,
+                        'credit' => $depreciationAmount,
+                    ]);
+                }
+
+                AssetDepreciation::create([
+                    'fixed_asset_id' => $asset->id,
+                    'date' => $depDate,
+                    'amount' => $depreciationAmount,
+                    'journal_entry_id' => $entry?->id,
+                ]);
+
+                $newTotal = $asset->total_depreciated + $depreciationAmount;
+                $asset->update([
+                    'total_depreciated' => $newTotal,
+                    'current_book_value' => max($asset->salvage_value, $asset->purchase_cost - $newTotal),
+                ]);
+            });
+
+            return "Depreciation of {$depreciationAmount} calculated and posted for asset {$asset->name} (#{$id}). New book value: {$asset->current_book_value}";
+        } catch (\Throwable $e) {
+            return "Error calculating depreciation: " . $e->getMessage();
+        }
+    }
+
+    // ====================================================
+    // --- AL-ASEEL GOLDEN: ADVANCED REPORTS (تقارير الأصيل) ---
+    // ====================================================
+
+    #[McpTool(name: 'get_aging_report', description: 'Get Debt Aging Analysis report for customers or vendors (type: customer, vendor)')]
+    public function getAgingReport(?string $type = 'customer'): string
+    {
+        $type = in_array($type, ['customer', 'vendor']) ? $type : 'customer';
+        $parties = Party::where('type', $type)->with('invoices')->get();
+        $today = now();
+
+        $aging = [];
+        foreach ($parties as $party) {
+            $pData = ['id' => $party->id, 'name' => $party->name, '0_30' => 0, '31_60' => 0, '61_90' => 0, 'over_90' => 0, 'total' => 0];
+            foreach ($party->invoices as $inv) {
+                $days = $today->diffInDays(\Carbon\Carbon::parse($inv->date));
+                $amount = (float)$inv->total_amount;
+                if ($days <= 30) $pData['0_30'] += $amount;
+                elseif ($days <= 60) $pData['31_60'] += $amount;
+                elseif ($days <= 90) $pData['61_90'] += $amount;
+                else $pData['over_90'] += $amount;
+                $pData['total'] += $amount;
+            }
+            if ($pData['total'] > 0) $aging[] = $pData;
+        }
+
+        return json_encode(['report' => 'Aging Analysis (' . ucfirst($type) . ')', 'data' => $aging], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_cost_centers_report', description: 'Get Cost Centers income & expense allocation report')]
+    public function getCostCentersReport(?int $costCenterId = null): string
+    {
+        $query = JournalEntryLine::with(['costCenter', 'account', 'journalEntry'])->whereNotNull('cost_center_id');
+        if ($costCenterId) $query->where('cost_center_id', $costCenterId);
+
+        $lines = $query->get();
+        $summary = [];
+
+        foreach ($lines as $line) {
+            $ccName = $line->costCenter?->name ?? 'Unknown CC';
+            if (!isset($summary[$ccName])) {
+                $summary[$ccName] = ['total_debit' => 0, 'total_credit' => 0, 'net_balance' => 0];
+            }
+            $summary[$ccName]['total_debit'] += (float)$line->debit;
+            $summary[$ccName]['total_credit'] += (float)$line->credit;
+            $summary[$ccName]['net_balance'] = $summary[$ccName]['total_debit'] - $summary[$ccName]['total_credit'];
+        }
+
+        return json_encode(['report' => 'Cost Centers Statement', 'data' => $summary], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_checks_report', description: 'Get Checks portfolio statistics and status overview')]
+    public function getChecksReport(?string $type = null, ?string $status = null): string
+    {
+        $query = Check::with(['party', 'currency']);
+        if ($type) $query->where('type', $type);
+        if ($status) $query->where('status', $status);
+
+        $checks = $query->get();
+        $stats = [
+            'total_received_amount' => Check::where('type', 'received')->sum('amount'),
+            'total_issued_amount' => Check::where('type', 'issued')->sum('amount'),
+            'under_collection_amount' => Check::where('status', 'under_collection')->sum('amount'),
+            'collected_amount' => Check::where('status', 'collected')->sum('amount'),
+            'checks_count' => $checks->count(),
+        ];
+
+        return json_encode(['report' => 'Checks Portfolio Report', 'stats' => $stats, 'checks' => $checks], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_inventory_valuation_report', description: 'Get Inventory Stock Valuation and quantities per warehouse')]
+    public function getInventoryValuationReport(): string
+    {
+        $stores = Store::with(['storeItems.item'])->where('is_active', true)->get();
+        $valuation = [];
+        $totalSystemValue = 0;
+
+        foreach ($stores as $store) {
+            $storeTotal = 0;
+            $itemsList = [];
+            foreach ($store->storeItems as $si) {
+                $item = $si->item;
+                $cost = (float)($item ? $item->purchase_price : 0);
+                $value = $si->quantity * $cost;
+                $storeTotal += $value;
+                $itemsList[] = [
+                    'item_name' => $item?->name,
+                    'quantity' => (float)$si->quantity,
+                    'unit_cost' => $cost,
+                    'total_value' => $value,
+                ];
+            }
+            $totalSystemValue += $storeTotal;
+            $valuation[] = [
+                'store_name' => $store->name,
+                'store_value' => $storeTotal,
+                'items' => $itemsList,
+            ];
+        }
+
+        return json_encode(['report' => 'Inventory Valuation Report', 'total_inventory_value' => $totalSystemValue, 'stores' => $valuation], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 }

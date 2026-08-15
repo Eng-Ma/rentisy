@@ -11,6 +11,7 @@ class Invoice extends Model
         'date',
         'party_id',
         'store_id',
+        'cost_center_id',
         'total_amount',
         'notes',
         'journal_entry_id',
@@ -24,6 +25,11 @@ class Invoice extends Model
     public function store()
     {
         return $this->belongsTo(Store::class);
+    }
+
+    public function costCenter()
+    {
+        return $this->belongsTo(CostCenter::class);
     }
 
     public function journalEntry()

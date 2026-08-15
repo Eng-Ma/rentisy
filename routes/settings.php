@@ -18,4 +18,9 @@ Route::middleware('auth')->group(function () {
     Route::get('settings/appearance', function () {
         return Inertia::render('settings/Appearance');
     })->name('appearance');
+
+    Route::get('settings/mcp', [\App\Http\Controllers\Settings\McpSettingsController::class, 'index'])->name('settings.mcp');
+    Route::post('settings/mcp', [\App\Http\Controllers\Settings\McpSettingsController::class, 'store'])->name('settings.mcp.store');
+    Route::patch('settings/mcp/{token}/toggle', [\App\Http\Controllers\Settings\McpSettingsController::class, 'toggle'])->name('settings.mcp.toggle');
+    Route::delete('settings/mcp/{token}', [\App\Http\Controllers\Settings\McpSettingsController::class, 'destroy'])->name('settings.mcp.destroy');
 });

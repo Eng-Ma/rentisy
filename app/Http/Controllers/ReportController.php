@@ -268,4 +268,181 @@ class ReportController extends Controller
             'filters' => $request->only(['party_id', 'from_date', 'to_date'])
         ]);
     }
+
+    public function aging(Request $request)
+    {
+        $type = $request->query('type', 'customer'); // customer or vendor
+        $parties = \App\Models\Party::where('type', $type)->with('invoices')->get();
+
+        $today = now();
+        $agingData = [];
+        $totals = ['0_30' => 0, '31_60' => 0, '61_90' => 0, 'over_90' => 0, 'total' => 0];
+
+        foreach ($parties as $party) {
+            $pData = [
+                'id' => $party->id,
+                'name' => $party->name,
+                'phone' => $party->phone,
+                '0_30' => 0,
+                '31_60' => 0,
+                '61_90' => 0,
+                'over_90' => 0,
+                'total' => 0,
+            ];
+
+            foreach ($party->invoices as $inv) {
+                $days = $today->diffInDays(\Carbon\Carbon::parse($inv->date));
+                $amount = (float)$inv->total_amount;
+
+                if ($days <= 30) {
+                    $pData['0_30'] += $amount;
+                    $totals['0_30'] += $amount;
+                } elseif ($days <= 60) {
+                    $pData['31_60'] += $amount;
+                    $totals['31_60'] += $amount;
+                } elseif ($days <= 90) {
+                    $pData['61_90'] += $amount;
+                    $totals['61_90'] += $amount;
+                } else {
+                    $pData['over_90'] += $amount;
+                    $totals['over_90'] += $amount;
+                }
+                $pData['total'] += $amount;
+                $totals['total'] += $amount;
+            }
+
+            if ($pData['total'] > 0) {
+                $agingData[] = $pData;
+            }
+        }
+
+        return Inertia::render('Reports/Aging', [
+            'agingData' => $agingData,
+            'totals' => $totals,
+            'type' => $type,
+        ]);
+    }
+
+    public function costCenters(Request $request)
+    {
+        $costCenters = \App\Models\CostCenter::with(['parent'])->get();
+        $costCenterId = $request->query('cost_center_id');
+
+        $reportData = [];
+        $totalDebit = 0;
+        $totalCredit = 0;
+
+        if ($costCenterId) {
+            $lines = \App\Models\JournalEntryLine::with(['account', 'journalEntry'])
+                ->where('cost_center_id', $costCenterId)
+                ->get();
+
+            foreach ($lines as $l) {
+                $totalDebit += (float)$l->debit;
+                $totalCredit += (float)$l->credit;
+                $reportData[] = [
+                    'date' => $l->journalEntry?->date,
+                    'reference' => $l->journalEntry?->reference,
+                    'account_name' => $l->account?->name,
+                    'account_code' => $l->account?->code,
+                    'description' => $l->description ?: $l->journalEntry?->description,
+                    'debit' => (float)$l->debit,
+                    'credit' => (float)$l->credit,
+                ];
+            }
+        }
+
+        return Inertia::render('Reports/CostCenters', [
+            'costCenters' => $costCenters,
+            'selectedId' => $costCenterId,
+            'reportData' => $reportData,
+            'totalDebit' => $totalDebit,
+            'totalCredit' => $totalCredit,
+            'netBalance' => $totalDebit - $totalCredit,
+        ]);
+    }
+
+    public function checks(Request $request)
+    {
+        $type = $request->query('type');
+        $status = $request->query('status');
+
+        $query = \App\Models\Check::with(['party', 'currency', 'endorsedParty'])->orderBy('due_date', 'asc');
+
+        if ($type) $query->where('type', $type);
+        if ($status) $query->where('status', $status);
+
+        $checks = $query->get();
+
+        $stats = [
+            'total_received' => \App\Models\Check::where('type', 'received')->sum('amount'),
+            'total_issued' => \App\Models\Check::where('type', 'issued')->sum('amount'),
+            'under_collection' => \App\Models\Check::where('status', 'under_collection')->sum('amount'),
+            'collected' => \App\Models\Check::where('status', 'collected')->sum('amount'),
+        ];
+
+        return Inertia::render('Reports/Checks', [
+            'checks' => $checks,
+            'stats' => $stats,
+            'filters' => $request->only(['type', 'status']),
+        ]);
+    }
+
+    public function stockMovement(Request $request)
+    {
+        $itemId = $request->query('item_id');
+        $items = \App\Models\Item::all();
+
+        $movements = [];
+        $selectedItem = null;
+
+        if ($itemId) {
+            $selectedItem = \App\Models\Item::with('category')->find($itemId);
+
+            // Invoices lines
+            $invLines = \App\Models\InvoiceLine::with(['invoice.party', 'invoice.store'])
+                ->where('item_id', $itemId)
+                ->get();
+
+            foreach ($invLines as $line) {
+                $isAddition = in_array($line->invoice->type, ['purchase', 'sale_return']);
+                $movements[] = [
+                    'date' => $line->invoice->date,
+                    'type' => $line->invoice->type,
+                    'reference' => 'INV-' . $line->invoice->id,
+                    'party_name' => $line->invoice->party?->name ?? 'عميل/مورد',
+                    'store_name' => $line->invoice->store?->name ?? 'المستودع الرئيسي',
+                    'in_qty' => $isAddition ? (float)$line->quantity : 0,
+                    'out_qty' => !$isAddition ? (float)$line->quantity : 0,
+                    'unit_price' => (float)$line->unit_price,
+                ];
+            }
+
+            // Transfer lines
+            $transLines = \App\Models\StockTransferLine::with(['transfer.fromStore', 'transfer.toStore'])
+                ->where('item_id', $itemId)
+                ->get();
+
+            foreach ($transLines as $tLine) {
+                $movements[] = [
+                    'date' => $tLine->transfer->date,
+                    'type' => $tLine->transfer->type,
+                    'reference' => $tLine->transfer->transfer_number,
+                    'party_name' => 'مناقلة مستودعية',
+                    'store_name' => ($tLine->transfer->fromStore?->name ?? 'مستودع') . ' -> ' . ($tLine->transfer->toStore?->name ?? 'مستودع'),
+                    'in_qty' => $tLine->transfer->type === 'stock_in' ? (float)$tLine->quantity : 0,
+                    'out_qty' => $tLine->transfer->type === 'stock_out' ? (float)$tLine->quantity : 0,
+                    'unit_price' => (float)$tLine->unit_cost,
+                ];
+            }
+
+            usort($movements, fn($a, $b) => strcmp($b['date'], $a['date']));
+        }
+
+        return Inertia::render('Reports/StockMovement', [
+            'items' => $items,
+            'selectedItem' => $selectedItem,
+            'movements' => $movements,
+        ]);
+    }
 }

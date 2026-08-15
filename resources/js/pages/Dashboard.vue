@@ -2,7 +2,15 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/vue3';
-import { Package, Users, FileText, Banknote, TrendingUp, BarChart3, CreditCard, ShoppingCart, Receipt } from 'lucide-vue-next';
+import { Package, Users, FileText, Banknote, TrendingUp, BarChart3, CreditCard, ShoppingCart, Receipt, Compass, Sparkles } from 'lucide-vue-next';
+import SystemGuideModal from '@/components/SystemGuideModal.vue';
+import { ref } from 'vue';
+
+const guideRef = ref<InstanceType<typeof SystemGuideModal> | null>(null);
+
+const openGuide = () => {
+    guideRef.value?.openGuide();
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -43,13 +51,23 @@ defineProps<{
                         <span>للبحث والانتقال السريع لأي مكان في النظام!</span>
                     </p>
                 </div>
-                <div class="mt-4 md:mt-0">
+                <div class="mt-4 md:mt-0 flex items-center gap-3">
+                    <button 
+                        @click="openGuide" 
+                        class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-foreground font-bold py-3 px-6 rounded-full border border-border shadow-md transition-all flex items-center gap-2 text-sm"
+                    >
+                        <Compass class="w-4 h-4 text-primary" />
+                        <span>دليل الاستخدام السريع</span>
+                    </button>
                     <Link href="/invoices/create" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3 px-8 rounded-full shadow-lg hover:shadow-indigo-500/30 transition-all duration-300 transform hover:-translate-y-1 flex items-center gap-2">
                         <FileText class="w-5 h-5" />
                         إنشاء فاتورة جديدة
                     </Link>
                 </div>
             </div>
+
+            <!-- Interactive System Guide Modal Component -->
+            <SystemGuideModal ref="guideRef" :auto-open-first-time="true" />
 
             <!-- Stats Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

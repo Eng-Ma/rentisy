@@ -206,7 +206,7 @@ class AccountingTools
     }
 
     #[McpTool(name: 'create_invoice', description: 'Create a new invoice (type: sale, purchase, sale_return, purchase_return). All parameters are optional with smart defaults.')]
-    public function createInvoice(?string $type = 'sale', ?int $partyId = null, ?int $storeId = null, mixed $linesJson = null, ?string $date = null, ?string $notes = null): string
+    public function createInvoice(?string $type = 'sale', ?int $partyId = null, ?int $storeId = null, ?string $linesJson = null, ?string $date = null, ?string $notes = null): string
     {
         $type = in_array($type, ['sale', 'purchase', 'sale_return', 'purchase_return']) ? $type : 'sale';
 
@@ -399,7 +399,7 @@ class AccountingTools
     }
 
     #[McpTool(name: 'create_journal_entry', description: 'Create a manual balanced journal entry')]
-    public function createJournalEntry(?string $description = 'Manual Journal Entry', mixed $linesJson = null, ?string $reference = null, ?string $date = null, ?int $currencyId = null, float $exchangeRate = 1.0): string
+    public function createJournalEntry(?string $description = 'Manual Journal Entry', ?string $linesJson = null, ?string $reference = null, ?string $date = null, ?int $currencyId = null, float $exchangeRate = 1.0): string
     {
         $linesData = [];
         if (!empty($linesJson)) {
@@ -1140,9 +1140,9 @@ class AccountingTools
     }
 
     #[McpTool(name: 'create_stock_transfer', description: 'Transfer items between two warehouses with automatic inventory stock updates')]
-    public function createStockTransfer(int $fromStoreId, int $toStoreId, mixed $linesJson, ?string $date = null, ?string $notes = null): string
+    public function createStockTransfer(int $fromStoreId, int $toStoreId, ?string $linesJson = null, ?string $date = null, ?string $notes = null): string
     {
-        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson, true) ?? []);
+        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson ?? '[]', true) ?? []);
         if (empty($linesData)) {
             $item = Item::first();
             if (!$item) return "Error: No items available in catalog.";
@@ -1193,10 +1193,14 @@ class AccountingTools
     }
 
     #[McpTool(name: 'create_stock_adjustment', description: 'Make a stock adjustment or stock-in/stock-out in a store')]
-    public function createStockAdjustment(int $storeId, mixed $linesJson, ?string $date = null, ?string $notes = null): string
+    public function createStockAdjustment(int $storeId, ?string $linesJson = null, ?string $date = null, ?string $notes = null): string
     {
-        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson, true) ?? []);
-        if (empty($linesData)) return "Error: lines data is required for stock adjustment.";
+        $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson ?? '[]', true) ?? []);
+        if (empty($linesData)) {
+            $item = Item::first();
+            if (!$item) return "Error: No items available in catalog.";
+            $linesData = [['item_id' => $item->id, 'quantity' => 1, 'unit_cost' => (float)$item->purchase_price]];
+        }
 
         $lastTransfer = StockTransfer::latest('id')->first();
         $nextNum = $lastTransfer ? ((int)substr($lastTransfer->transfer_number, 3) + 1) : 1;
@@ -1251,7 +1255,7 @@ class AccountingTools
     }
 
     #[McpTool(name: 'create_quotation', description: 'Create a new price quotation / offer for a customer')]
-    public function createQuotation(int $partyId, mixed $linesJson, ?int $storeId = null, float $discount = 0, ?string $date = null, ?string $expiryDate = null, ?string $notes = null): string
+    public function createQuotation(int $partyId, ?string $linesJson = null, ?int $storeId = null, float $discount = 0, ?string $date = null, ?string $expiryDate = null, ?string $notes = null): string
     {
         $linesData = is_array($linesJson) ? $linesJson : (json_decode($linesJson, true) ?? []);
         if (empty($linesData)) {

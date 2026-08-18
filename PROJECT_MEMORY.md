@@ -49,3 +49,16 @@ A complete enterprise-grade accounting and ERP system inspired by "Al-Aseel Al-D
 - **Transport:** `App\MCP\LaravelSseTransport` (File Cache store)
 - **Tools Suite:** `App\MCP\AccountingTools`
   - Complete read, write, update, delete, lifecycle, and reporting tools matching all system capabilities.
+
+## OAuth 2.0 & OpenID Discovery Configuration
+- **OAuth Metadata Endpoints:**
+  - `/.well-known/oauth-authorization-server`
+  - `/.well-known/openid-configuration`
+  - `/mcp/sse/.well-known/oauth-authorization-server`
+  - `/mcp/sse/.well-known/openid-configuration`
+- **PKCE Support:** `code_challenge_methods_supported: ["S256", "plain"]`
+- **Endpoints:**
+  - Authorization: `/oauth/authorize`
+  - Token: `/oauth/token`
+  - Register: `/oauth/register`
+

@@ -32,19 +32,23 @@ class AuthenticatedSessionController extends Controller
         $redirectUri = session('mcp_oauth_redirect_uri');
         $state = session('mcp_oauth_state');
         $clientId = session('mcp_oauth_client_id');
+        $codeChallenge = session('mcp_oauth_code_challenge');
+        $codeChallengeMethod = session('mcp_oauth_code_challenge_method');
 
         $request->authenticate();
 
         $request->session()->regenerate();
 
-        // If this login originated from ChatGPT OAuth, immediately redirect back to ChatGPT
+        // If this login originated from ChatGPT OAuth / Connector, immediately redirect back
         if ($redirectUri) {
-            session()->forget(['mcp_oauth_redirect_uri', 'mcp_oauth_state', 'mcp_oauth_client_id']);
+            session()->forget(['mcp_oauth_redirect_uri', 'mcp_oauth_state', 'mcp_oauth_client_id', 'mcp_oauth_code_challenge', 'mcp_oauth_code_challenge_method']);
 
             $authCode = 'code_' . Str::random(40);
             \Illuminate\Support\Facades\Cache::put('mcp_oauth_code_' . $authCode, [
                 'user_id' => auth()->id(),
                 'client_id' => $clientId,
+                'code_challenge' => $codeChallenge,
+                'code_challenge_method' => $codeChallengeMethod,
             ], 300);
 
             $delimiter = str_contains($redirectUri, '?') ? '&' : '?';

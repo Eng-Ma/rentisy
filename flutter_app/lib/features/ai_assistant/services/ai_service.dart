@@ -427,12 +427,6 @@ $liveData
     List<AiMessage> history,
     String apiKey,
     String model,
-  // --- OPENAI & GROQ IMPLEMENTATION ---
-  static Future<AiMessage> _sendOpenAiCompatible(
-    String prompt,
-    List<AiMessage> history,
-    String apiKey,
-    String model,
     String endpointUrl,
   ) async {
     final liveSysPrompt = await getLiveSystemPrompt();

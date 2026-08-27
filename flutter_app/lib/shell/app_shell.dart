@@ -7,6 +7,7 @@ import '../features/auth/screens/login_screen.dart';
 
 // Screens
 import '../features/dashboard/screens/dashboard_screen.dart';
+import '../features/ai_assistant/screens/ai_assistant_screen.dart';
 import '../features/accounts/screens/accounts_screen.dart';
 import '../features/journal_entries/screens/journal_entries_screen.dart';
 import '../features/vouchers/screens/vouchers_screen.dart';
@@ -36,6 +37,11 @@ class _AppShellState extends State<AppShell> {
       title: 'الرئيسية',
       icon: Icons.dashboard_rounded,
       builder: () => const DashboardScreen(),
+    ),
+    _NavSection(
+      title: 'المساعد الذكي (AI Agent)',
+      icon: Icons.auto_awesome_rounded,
+      builder: () => const AiAssistantScreen(),
     ),
     _NavSection(
       title: 'شجرة الحسابات',

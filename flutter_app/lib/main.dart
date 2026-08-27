@@ -15,6 +15,7 @@ import 'features/fixed_assets/providers/fixed_assets_provider.dart';
 import 'features/cost_centers/providers/cost_centers_provider.dart';
 import 'features/parties/providers/parties_provider.dart';
 import 'features/reports/providers/reports_provider.dart';
+import 'features/ai_assistant/providers/ai_assistant_provider.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'shell/app_shell.dart';
 
@@ -43,6 +44,7 @@ class AccountingErpApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => CostCentersProvider()),
         ChangeNotifierProvider(create: (_) => PartiesProvider()),
         ChangeNotifierProvider(create: (_) => ReportsProvider()),
+        ChangeNotifierProvider(create: (_) => AiAssistantProvider()),
       ],
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
@@ -102,7 +104,7 @@ class _AppEntrypointState extends State<AppEntrypoint> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
+              CircularProgressIndicator.adaptive(),
               SizedBox(height: 16),
               Text(
                 'جارِ التحقق من جلسة العمل...',

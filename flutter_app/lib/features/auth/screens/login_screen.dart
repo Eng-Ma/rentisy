@@ -299,11 +299,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: authProvider.isLoading
                                 ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator.adaptive(
                                       strokeWidth: 2.5,
-                                      color: Colors.white,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                     ),
                                   )
                                 : const Text(

@@ -92,5 +92,5 @@ A complete enterprise-grade accounting and ERP system inspired by "Al-Aseel Al-D
   - `cost_centers/`: Cost centers tree & expense/revenue tracking.
   - `parties/`: Customer and vendor management.
   - `reports/`: Complete 8 Al-Aseel financial & stock reports with charts & tables.
-  - `ai_assistant/`: Multi-provider AI Accounting Agent (ChatGPT, Google Gemini, Groq) with per-user custom API key configuration, natural language bookkeeping, and automated tool/action execution (invoices, vouchers, journal entries, reports, items, parties).
+  - `ai_assistant/`: Multi-provider AI Accounting Agent (ChatGPT, Google Gemini, Groq) with per-user custom API key configuration, live model discovery, natural language bookkeeping, and full CRUD, search, filter, and lifecycle actions across all 12 modules (Accounts, Journals, Vouchers, Checks, Invoices, Quotations, Items, Stock Transfers, Parties, Fixed Assets, Cost Centers, and all 8 Reports).
   - `settings/`: Host URL configuration, dark/light theme, user profile.

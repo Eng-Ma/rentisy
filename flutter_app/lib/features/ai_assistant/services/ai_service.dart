@@ -104,6 +104,43 @@ class AiService {
     }
   }
 
+  // Fetch Live Database System Context for LLMs
+  static Future<String> _getLiveDatabaseContext() async {
+    try {
+      final dashRes = await ApiService.get(ApiEndpoints.dashboard);
+      if (dashRes.success && dashRes.rawJson is Map) {
+        final d = dashRes.rawJson as Map<String, dynamic>;
+        final sales = d['total_sales'] ?? d['sales'] ?? 0;
+        final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
+        final profit = d['net_profit'] ?? d['profit'] ?? 0;
+        final expenses = d['total_expenses'] ?? d['expenses'] ?? 0;
+        final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
+        final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
+        final invCount = d['total_invoices_count'] ?? 0;
+        final vouchCount = d['total_vouchers_count'] ?? 0;
+
+        return '''
+أنت المحاسب المالي الذكي وخبير ERP لنظام المحاسبة وإدارة المستودعات.
+أنت متصل بالفعل بقاعدة بيانات النظام الحقيقية ولديك كافة الصلاحيات لقراءتها والتعديل عليها.
+لا تخبر المستخدم أبداً أنك لا تملك صلاحية أو تطلب منه مفاتيح للوصول إلى قاعدة البيانات.
+
+البيانات المالية الحقيقية اللحظية للنظام الآن:
+- صافي الأرباح: $profit ر.س
+- إجمالي المبيعات: $sales ر.س
+- إجمالي المشتريات: $purchases ر.س
+- إجمالي المصروفات: $expenses ر.س
+- رصيد الصندوق والبنوك: $cash ر.س
+- ذمم وديون العملاء: $receivables ر.س
+- إجمالي الفواتير: $invCount | إجمالي السندات: $vouchCount
+
+أجب باختصار شديد، باللغة العربية، وبالأرقام المالية المباشرة والواضحة.
+''';
+      }
+    } catch (_) {}
+
+    return 'أنت محاسب مالي ذكي وخبير في النظام. أجب باختصار شديد وبالأرقام المالية المباشرة.';
+  }
+
   // =========================================================================
   // --- REAL-TIME STREAMING ENTRYPOINT ---
   // =========================================================================
@@ -132,21 +169,62 @@ class AiService {
       return;
     }
 
-    // 2. Check API Key
+    // 2. If prompt asks for database/data, give live DB overview even without key
+    final p = prompt.trim();
+    if (p.contains('بيانات') || p.contains('بياناتي') || p.contains('قاعدة البيانات') || p.contains('معلومات') || p.contains('أرصدتي') || p.contains('تقرير')) {
+      final dashAction = await executeTool('get_dashboard_stats', {});
+      if (dashAction.isSuccess && dashAction.result is Map) {
+        final d = dashAction.result as Map<String, dynamic>;
+        final sales = d['total_sales'] ?? d['sales'] ?? 0;
+        final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
+        final profit = d['net_profit'] ?? d['profit'] ?? 0;
+        final expenses = d['total_expenses'] ?? d['expenses'] ?? 0;
+        final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
+        final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
+
+        final fullText = '''
+📊 إليك بياناتك المالية الحقيقية المستخرجة مباشرة من قاعدة البيانات:
+• صافي الأرباح: $profit ر.س
+• إجمالي المبيعات: $sales ر.س
+• إجمالي المشتريات: $purchases ر.س
+• إجمالي المصروفات: $expenses ر.س
+• رصيد الصندوق والبنوك: $cash ر.س
+• ذمم وديون العملاء: $receivables ر.س
+
+(جميع البيانات أعلاه حية ومحدثة من قيود وفواتير النظام الحقيقية).
+''';
+        final words = fullText.split(' ');
+        for (int i = 0; i < words.length; i++) {
+          final isLast = i == words.length - 1;
+          onChunk(words[i] + (isLast ? '' : ' '), actions: isLast ? [dashAction] : null, isDone: isLast);
+          await Future.delayed(const Duration(milliseconds: 16));
+        }
+        return;
+      }
+    }
+
+    // 3. If conversational question and API key is missing
     if (apiKey.trim().isEmpty) {
-      onChunk('الرجاء إدخال مفتاح API الخاص بك أولاً بالضغط على أيقونة الإعدادات ⚙️ أعلى الشاشة.', isDone: true);
+      final fullText = 'الرجاء إدخال مفتاح API الخاص بك بالضغط على أيقونة الإعدادات ⚙️ أعلى الشاشة لتمكين النماذج الذكية (ChatGPT, Gemini, Groq) من إجراء المحادثات المتقدمة.';
+      final words = fullText.split(' ');
+      for (int i = 0; i < words.length; i++) {
+        final isLast = i == words.length - 1;
+        onChunk(words[i] + (isLast ? '' : ' '), isDone: isLast);
+        await Future.delayed(const Duration(milliseconds: 16));
+      }
       return;
     }
 
-    // 3. Stream from LLM Provider with Live DB SQL Integration
+    // 4. Stream from LLM Provider with Live DB Context Injected
     try {
+      final systemPrompt = await _getLiveDatabaseContext();
       if (provider == AiProviderType.gemini) {
-        await _streamGemini(prompt, history, apiKey, model, onChunk);
+        await _streamGemini(prompt, history, apiKey, model, systemPrompt, onChunk);
       } else {
         final baseUrl = provider == AiProviderType.groq
             ? 'https://api.groq.com/openai/v1/chat/completions'
             : 'https://api.openai.com/v1/chat/completions';
-        await _streamOpenAiCompatible(prompt, history, apiKey, model, baseUrl, onChunk);
+        await _streamOpenAiCompatible(prompt, history, apiKey, model, baseUrl, systemPrompt, onChunk);
       }
     } catch (e) {
       onChunk('\n\nحدث خطأ أثناء البث المباشر:\n$e', isDone: true);
@@ -160,6 +238,7 @@ class AiService {
     String apiKey,
     String model,
     String endpointUrl,
+    String systemPrompt,
     Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
   ) async {
     final client = http.Client();
@@ -169,10 +248,7 @@ class AiService {
           : (endpointUrl.contains('groq') ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
 
       final messages = [
-        {
-          'role': 'system',
-          'content': 'أنت محاسب مالي ذكي وخبير ولديك وصول مباشر لقاعدة البيانات وجداول النظام (accounts, invoices, vouchers, parties, items, checks, journal_entries). أجب باختصار شديد واحترافية وبالأرقام المالية المباشرة.'
-        },
+        {'role': 'system', 'content': systemPrompt},
         ...history.where((m) => !m.isLoading).map((m) {
           return {
             'role': m.sender == MessageSender.user ? 'user' : 'assistant',
@@ -234,6 +310,7 @@ class AiService {
     List<AiMessage> history,
     String apiKey,
     String model,
+    String systemPrompt,
     Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
   ) async {
     final client = http.Client();
@@ -250,7 +327,7 @@ class AiService {
         }),
         {
           'role': 'user',
-          'parts': [{'text': 'أنت محاسب مالي ذكي ولديك وصول مباشر لقاعدة البيانات. أجب باختصار شديد ومباشر:\n$prompt'}],
+          'parts': [{'text': '$systemPrompt\n\nسؤال المستخدم:\n$prompt'}],
         }
       ];
 

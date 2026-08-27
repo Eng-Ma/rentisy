@@ -1,11 +1,10 @@
 class ApiEndpoints {
-  // Default base URLs depending on platform:
-  // Android Emulator: http://10.0.2.2:8000/api
-  // iOS / macOS / Web: http://127.0.0.1:8000/api
+  // Production Cloud URL
+  static const String defaultProductionUrl = 'https://codeit-gaza.space/api';
   static const String defaultLocalUrl = 'http://127.0.0.1:8000/api';
   static const String defaultAndroidEmulatorUrl = 'http://10.0.2.2:8000/api';
 
-  static String baseUrl = defaultLocalUrl;
+  static String baseUrl = defaultProductionUrl;
 
   // Auth Endpoints
   static String get login => '$baseUrl/login';

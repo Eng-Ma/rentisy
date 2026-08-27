@@ -134,6 +134,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     runSpacing: 8,
                     children: [
                       ActionChip(
+                        avatar: const Icon(Icons.cloud_done_rounded, size: 16),
+                        label: const Text('الخادم السحابي (codeit-gaza.space)'),
+                        onPressed: () {
+                          setState(() => _urlController.text = 'https://codeit-gaza.space/api');
+                          _saveUrl();
+                        },
+                      ),
+                      ActionChip(
                         label: const Text('محاكي أندرويد (10.0.2.2)'),
                         onPressed: () {
                           setState(() => _urlController.text = 'http://10.0.2.2:8000/api');

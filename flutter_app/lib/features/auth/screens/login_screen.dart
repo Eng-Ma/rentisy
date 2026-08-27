@@ -62,6 +62,13 @@ class _LoginScreenState extends State<LoginScreen> {
               runSpacing: 8,
               children: [
                 ActionChip(
+                  avatar: const Icon(Icons.cloud_done_rounded, size: 16),
+                  label: const Text('الخادم السحابي (codeit-gaza.space)'),
+                  onPressed: () {
+                    serverController.text = 'https://codeit-gaza.space/api';
+                  },
+                ),
+                ActionChip(
                   label: const Text('المحاكي (10.0.2.2)'),
                   onPressed: () {
                     serverController.text = 'http://10.0.2.2:8000/api';

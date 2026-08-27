@@ -156,12 +156,13 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
           if (!mounted) return;
 
           setState(() {
+            _callStatus = 'listening';
             _assistantSpeechText = responseText;
             _lastActions = actions ?? [];
           });
 
           // Resume listening loop automatically after short pause!
-          Future.delayed(const Duration(milliseconds: 1200), () {
+          Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted && !_isMuted) {
               _listenToUser();
             }
@@ -171,15 +172,22 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _callStatus = 'error';
+        _callStatus = 'listening';
         _assistantSpeechText = 'حدث خطأ أثناء معالجة الأمر: $e';
       });
 
-      Future.delayed(const Duration(milliseconds: 2000), () {
+      Future.delayed(const Duration(milliseconds: 1500), () {
         if (mounted && !_isMuted) {
           _listenToUser();
         }
       });
+    } finally {
+      if (mounted && _callStatus == 'processing') {
+        setState(() {
+          _callStatus = 'listening';
+        });
+        _listenToUser();
+      }
     }
   }
 

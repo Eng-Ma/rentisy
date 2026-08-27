@@ -128,7 +128,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
     return Scaffold(
       appBar: CustomAppBar(
-        title: 'المساعد المحاسبي الذكي (AI Agent)',
+        title: 'رينتيسي | المساعد المحاسبي الذكي',
         actions: [
           // Active Provider Badge & Settings
           InkWell(

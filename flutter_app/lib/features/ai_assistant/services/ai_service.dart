@@ -182,9 +182,9 @@ class AiService {
       return;
     }
 
-    // 2. If prompt asks for database/data, give live DB overview even without key
+    // 2. If prompt asks for database/data overview
     final p = normalizedPrompt.trim();
-    if (p.contains('بيانات') || p.contains('بياناتي') || p.contains('قاعدة البيانات') || p.contains('معلومات') || p.contains('أرصدتي') || p.contains('تقرير')) {
+    if (p.contains('بياناتي') || p.contains('معلومات النظام') || p.contains('أرصدتي') || p.contains('تقرير عام')) {
       final dashAction = await executeTool('get_dashboard_stats', {});
       if (dashAction.isSuccess && dashAction.result is Map) {
         final d = dashAction.result as Map<String, dynamic>;
@@ -400,6 +400,25 @@ class AiService {
     final p = normalizeNumerals(prompt.trim());
     final upper = p.toUpperCase();
 
+    // Natural Dialect Intent Helpers
+    bool hasCreationVerb(String text) {
+      return text.contains('اعمل') || text.contains('اعملي') || text.contains('اعمل لي') ||
+             text.contains('سوي') || text.contains('سويلي') || text.contains('سوي لي') ||
+             text.contains('ساوي') || text.contains('حط') || text.contains('حطلي') ||
+             text.contains('ضيف') || text.contains('أضف') || text.contains('اضف') ||
+             text.contains('سجل') || text.contains('سجلي') || text.contains('أنشئ') ||
+             text.contains('انشئ') || text.contains('طلع') || text.contains('طلعلي') ||
+             text.contains('جديد') || text.contains('جديدة') || text.contains('بدي') ||
+             text.contains('أريد') || text.contains('اريد');
+    }
+
+    bool hasListingVerb(String text) {
+      return text.contains('استعرض') || text.contains('اعرض') || text.contains('ورجيني') ||
+             text.contains('فرجيني') || text.contains('شوف') || text.contains('قائمة') ||
+             text.contains('كل السندات') || text.contains('جميع السندات') || text.contains('ما هي') ||
+             text.contains('كم عدد') || text.contains('هات');
+    }
+
     // Helper: Extract ID numbers (e.g. "رقم 5", "#5", "5")
     int? extractId() {
       final match = RegExp(r'(?:رقم|id|#)\s*(\d+)').firstMatch(p) ?? RegExp(r'(\d+)').firstMatch(p);
@@ -445,10 +464,9 @@ class AiService {
     // -------------------------------------------------------------
     // 0.1 CONVERSATIONAL UPDATE / MODIFICATION (خليها 1000 / عدل السند / عدل المبلغ)
     // -------------------------------------------------------------
-    if (p.startsWith('خليها') || p.startsWith('خليه') || p.contains('عدل') || p.contains('تعديل') || p.contains('غير') || p.contains('تغيير')) {
+    if (p.startsWith('خليها') || p.startsWith('خليه') || p.startsWith('غيرها') || p.startsWith('غيره') || p.contains('عدل') || p.contains('تعديل') || p.contains('غير المبلغ') || p.contains('تغيير المبلغ')) {
       final newAmount = extractAmount();
       if (newAmount != null && newAmount > 0) {
-        // 1. Look for target voucher (either explicitly mentioned or latest voucher)
         int? targetVoucherId = extractId();
         String voucherNumber = '';
 
@@ -521,7 +539,7 @@ class AiService {
     // -------------------------------------------------------------
     // 1. DELETE ACTIONS (حذف أي عنصر من الـ 12 شاشة)
     // -------------------------------------------------------------
-    if (p.contains('احذف') || p.contains('حذف') || p.contains('مسح')) {
+    if (p.contains('احذف') || p.contains('حذف') || p.contains('مسح') || p.contains('شيل')) {
       final id = extractId();
       if (id != null) {
         if (p.contains('سند')) {
@@ -611,20 +629,23 @@ class AiService {
     }
 
     // -------------------------------------------------------------
-    // 5. VOUCHERS CREATION (إنشاء سند قبض / سند صرف)
+    // 5. VOUCHERS: CREATION vs LISTING (سندات القبض والصرف)
     // -------------------------------------------------------------
-    if ((p.contains('سند قبض') || p.contains('سند صرف') || (p.contains('سند') && (p.contains('قبض') || p.contains('صرف')))) &&
-        (p.contains('أنشئ') || p.contains('انشئ') || p.contains('أضف') || p.contains('اضف') || p.contains('سجل') || p.contains('بمبلغ'))) {
-      final isPayment = p.contains('صرف');
+    if (p.contains('سند') || p.contains('السندات') || p.contains('سندات')) {
       final amount = extractAmount();
-      if (amount != null && amount > 0) {
+      final isCreating = (amount != null && amount > 0) || hasCreationVerb(p);
+
+      // If user provides amount or creation verb, CREATE VOUCHER
+      if (isCreating && !hasListingVerb(p)) {
+        final isPayment = p.contains('صرف');
         final isBank = p.contains('بنك') || p.contains('شيك');
         final type = isPayment ? 'payment' : 'receipt';
         final method = isBank ? 'bank' : 'cash';
+        final voucherAmount = amount ?? 100.0;
 
         final action = await executeTool('create_voucher', {
           'type': type,
-          'amount': amount,
+          'amount': voucherAmount,
           'payment_method': method,
           'notes': p,
         });
@@ -639,83 +660,10 @@ class AiService {
 
         final label = isPayment ? 'سند صرف' : 'سند قبض';
         final box = isBank ? 'البنك' : 'الصندوق النقدي';
-        return _resultMsg('✅ تم إنشاء $label بمبلغ ${amount.toStringAsFixed(2)} ر.س من حساب $box وترحيل القيد المحاسبي بنجاح.$voucherNum', action);
+        return _resultMsg('✅ تم إنشاء $label بمبلغ ${voucherAmount.toStringAsFixed(2)} ر.س من حساب $box وترحيل القيد المحاسبي بنجاح.$voucherNum', action);
       }
-    }
 
-    // -------------------------------------------------------------
-    // 6. INVOICES CREATION (إنشاء فاتورة مبيعات / مشتريات)
-    // -------------------------------------------------------------
-    if ((p.contains('فاتورة') || p.contains('فاتوره')) && (p.contains('أنشئ') || p.contains('انشئ') || p.contains('أضف') || p.contains('اضف') || p.contains('سجل') || p.contains('جديدة'))) {
-      final isPurchase = p.contains('شراء') || p.contains('مشتريات');
-      final type = isPurchase ? 'purchase' : 'sale';
-
-      final action = await executeTool('create_invoice', {
-        'type': type,
-        'notes': p,
-      });
-
-      final typeText = isPurchase ? 'مشتريات' : 'مبيعات';
-      return _resultMsg('✅ تم إنشاء فاتورة $typeText جديدة وتحديث أرصدة المخازن والقيود المحاسبية بنجاح.', action);
-    }
-
-    // -------------------------------------------------------------
-    // 7. PARTIES CREATION (إضافة عميل أو مورد)
-    // -------------------------------------------------------------
-    if ((p.contains('عميل') || p.contains('مورد')) && (p.contains('أضف') || p.contains('اضف') || p.contains('إضافة') || p.contains('سجل') || p.contains('جديد'))) {
-      final isVendor = p.contains('مورد');
-      String name = p.replaceAll(RegExp(r'(أضف|اضف|إضافة|سجل|عميل|مورد|جديد|اسمه|باسم|شركة|مؤسسة)'), '').trim();
-      if (name.isEmpty) name = isVendor ? 'مورد جديد' : 'عميل جديد';
-
-      final action = await executeTool('create_party', {
-        'name': name,
-        'type': isVendor ? 'vendor' : 'customer',
-      });
-
-      return _resultMsg('✅ تم إضافة ${isVendor ? 'المورد' : 'العميل'} "$name" بنجاح إلى النظام.', action);
-    }
-
-    // -------------------------------------------------------------
-    // 8. ITEMS CREATION (إضافة صنف بالمستودع)
-    // -------------------------------------------------------------
-    if ((p.contains('صنف') || p.contains('منتج')) && (p.contains('أضف') || p.contains('اضف') || p.contains('إضافة') || p.contains('سجل') || p.contains('جديد'))) {
-      String name = p.replaceAll(RegExp(r'(أضف|اضف|إضافة|سجل|صنف|منتج|جديد|اسمه|باسم)'), '').trim();
-      if (name.isEmpty) name = 'صنف جديد';
-
-      final action = await executeTool('create_item', {
-        'name': name,
-        'sales_price': extractAmount() ?? 100.0,
-        'purchase_price': (extractAmount() ?? 100.0) * 0.8,
-      });
-
-      return _resultMsg('✅ تم إضافة الصنف "$name" إلى دليل المستودعات بنجاح.', action);
-    }
-
-    // -------------------------------------------------------------
-    // 9. COST CENTERS & FIXED ASSETS CREATION
-    // -------------------------------------------------------------
-    if (p.contains('مركز تكلفة') && (p.contains('أضف') || p.contains('اضف') || p.contains('جديد'))) {
-      String name = p.replaceAll(RegExp(r'(أضف|اضف|مركز|تكلفة|التكلفة|جديد|اسمه)'), '').trim();
-      final action = await executeTool('create_cost_center', {'name': name.isEmpty ? 'مشروع جديد' : name});
-      return _resultMsg('✅ تم إنشاء مركز التكلفة "$name" بنجاح.', action);
-    }
-
-    if (p.contains('أصل') && (p.contains('أضف') || p.contains('اضف') || p.contains('جديد'))) {
-      String name = p.replaceAll(RegExp(r'(أضف|اضف|أصل|ثابت|جديد|اسمه)'), '').trim();
-      final action = await executeTool('create_fixed_asset', {
-        'name': name.isEmpty ? 'أصل رأسمالي جديد' : name,
-        'purchase_cost': extractAmount() ?? 5000.0,
-        'useful_life_years': 5,
-      });
-      return _resultMsg('✅ تم تسجيل الأصل الثابت "$name" في السجل العام بنجاح.', action);
-    }
-
-    // -------------------------------------------------------------
-    // 10. ADVANCED SEARCH & FILTERING & QUERIES (فحص واستعلام وفلترة)
-    // -------------------------------------------------------------
-
-    // A. Vouchers Listing / Query (سندات القبض والصرف)
-    if (p.contains('سندات') || p.contains('السندات') || p.contains('سند قبض') || p.contains('سند صرف') || p.contains('سندات القبض') || p.contains('سندات الصرف')) {
+      // Otherwise, LIST VOUCHERS
       final isReceipt = p.contains('قبض');
       final isPayment = p.contains('صرف');
       String? type;
@@ -735,14 +683,31 @@ class AiService {
         final amt = v['amount'] ?? 0;
         final method = v['payment_method'] == 'bank' ? 'بنكي' : (v['payment_method'] == 'check' ? 'شيك' : 'نقدي');
         final partyName = v['party'] is Map ? v['party']['name'] : 'طرف عام';
-        final date = v['date'] ?? '';
+        final date = (v['date'] ?? '').toString().split('T').first;
         buf.writeln('${i + 1}. **$num** ($vType) — المبلغ: $amt ر.س ($method) | الطرف: $partyName | التاريخ: $date');
       }
       return _msg(buf.toString().trim(), [action]);
     }
 
-    // B. Invoices Listing / Query (الفواتير)
-    if (p.contains('فواتير') || p.contains('الفواتير') || p.contains('فواتير المبيعات') || p.contains('فواتير المشتريات')) {
+    // -------------------------------------------------------------
+    // 6. INVOICES: CREATION vs LISTING (الفواتير)
+    // -------------------------------------------------------------
+    if (p.contains('فاتورة') || p.contains('فاتوره') || p.contains('فواتير') || p.contains('الفواتير')) {
+      final isCreating = hasCreationVerb(p);
+      if (isCreating && !hasListingVerb(p)) {
+        final isPurchase = p.contains('شراء') || p.contains('مشتريات');
+        final type = isPurchase ? 'purchase' : 'sale';
+
+        final action = await executeTool('create_invoice', {
+          'type': type,
+          'notes': p,
+        });
+
+        final typeText = isPurchase ? 'مشتريات' : 'مبيعات';
+        return _resultMsg('✅ تم إنشاء فاتورة $typeText جديدة وتحديث أرصدة المخازن والقيود المحاسبية بنجاح.', action);
+      }
+
+      // LIST INVOICES
       final action = await executeTool('get_invoices', {});
       final list = action.result is List ? (action.result as List) : ((action.result is Map && action.result['data'] is List) ? action.result['data'] as List : []);
       if (list.isEmpty) {
@@ -754,30 +719,32 @@ class AiService {
         final num = inv['invoice_number'] ?? '#${inv['id']}';
         final type = inv['type'] == 'sale' ? 'فاتورة بيع' : (inv['type'] == 'purchase' ? 'فاتورة شراء' : 'مرتجع');
         final total = inv['total_amount'] ?? 0;
-        final date = inv['date'] ?? '';
+        final date = (inv['date'] ?? '').toString().split('T').first;
         buf.writeln('${i + 1}. **$num** ($type) — الإجمالي: $total ر.س | التاريخ: $date');
       }
       return _msg(buf.toString().trim(), [action]);
     }
 
-    // C. Warehouse Items Search & Filter
-    if (p.contains('أصناف') || p.contains('الاصناف') || p.contains('المستودع') || p.contains('الكميات') || p.contains('المخزون')) {
-      final action = await executeTool('get_items_catalog', {'search': p.replaceAll(RegExp(r'(أصناف|الاصناف|المستودع|الكميات|المخزون|ابحث|عن|اعرض|فحص|فلتر)'), '').trim()});
-      if (action.isSuccess && action.result is List) {
-        final items = action.result as List;
-        if (items.isEmpty) return _msg('📦 لم يتم العثور على أصناف مطابقة للبحث بالمستودع.', [action]);
-        final buf = StringBuffer('📦 قائمة الأصناف المتوفرة بالمستودع (${items.length} صنف):\n\n');
-        for (int i = 0; i < items.length && i < 15; i++) {
-          final it = items[i];
-          buf.writeln('${i + 1}. **${it['name']}** (${it['unit'] ?? 'حبة'}) — سعر البيع: ${it['sales_price']} ر.س | التكلفة: ${it['purchase_price']} ر.س');
-        }
-        return _msg(buf.toString().trim(), [action]);
-      }
-    }
+    // -------------------------------------------------------------
+    // 7. PARTIES: CREATION vs LISTING (العملاء والموردين)
+    // -------------------------------------------------------------
+    if (p.contains('عميل') || p.contains('مورد') || p.contains('عملاء') || p.contains('موردين') || p.contains('زبون')) {
+      final isCreating = hasCreationVerb(p);
+      if (isCreating && !hasListingVerb(p)) {
+        final isVendor = p.contains('مورد');
+        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|عميل|مورد|زبون|جديد|جديدة|اسمه|باسم|شركة|مؤسسة)'), '').trim();
+        if (name.isEmpty) name = isVendor ? 'مورد جديد' : 'عميل جديد';
 
-    // D. Customers & Vendors Search & Filter
-    if (p.contains('عملاء') || p.contains('موردين') || p.contains('العملاء') || p.contains('الموردين') || p.contains('ديون') || p.contains('ذمم')) {
-      final action = await executeTool('get_parties_list', {'search': p.replaceAll(RegExp(r'(عملاء|موردين|العملاء|الموردين|ديون|ذمم|ابحث|عن|اعرض|فحص|فلتر)'), '').trim()});
+        final action = await executeTool('create_party', {
+          'name': name,
+          'type': isVendor ? 'vendor' : 'customer',
+        });
+
+        return _resultMsg('✅ تم إضافة ${isVendor ? 'المورد' : 'العميل'} "$name" بنجاح إلى النظام.', action);
+      }
+
+      // LIST PARTIES
+      final action = await executeTool('get_parties_list', {'search': p.replaceAll(RegExp(r'(عملاء|موردين|العملاء|الموردين|ديون|ذمم|ابحث|عن|اعرض|فحص|فلتر|ورجيني|فرجيني)'), '').trim()});
       if (action.isSuccess && action.result is List) {
         final parties = action.result as List;
         if (parties.isEmpty) return _msg('👥 لم يتم العثور على أطراف مطابقة للبحث.', [action]);
@@ -791,7 +758,60 @@ class AiService {
       }
     }
 
-    // E. Checks Portfolio Search & Filter
+    // -------------------------------------------------------------
+    // 8. ITEMS: CREATION vs LISTING (الأصناف والمستودع)
+    // -------------------------------------------------------------
+    if (p.contains('صنف') || p.contains('منتج') || p.contains('أصناف') || p.contains('الاصناف') || p.contains('المستودع') || p.contains('المخزون')) {
+      final isCreating = hasCreationVerb(p);
+      if (isCreating && !hasListingVerb(p)) {
+        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|صنف|منتج|جديد|جديدة|اسمه|باسم)'), '').trim();
+        if (name.isEmpty) name = 'صنف جديد';
+
+        final action = await executeTool('create_item', {
+          'name': name,
+          'sales_price': extractAmount() ?? 100.0,
+          'purchase_price': (extractAmount() ?? 100.0) * 0.8,
+        });
+
+        return _resultMsg('✅ تم إضافة الصنف "$name" إلى دليل المستودعات بنجاح.', action);
+      }
+
+      // LIST ITEMS
+      final action = await executeTool('get_items_catalog', {'search': p.replaceAll(RegExp(r'(أصناف|الاصناف|المستودع|الكميات|المخزون|ابحث|عن|اعرض|فحص|فلتر|ورجيني|فرجيني)'), '').trim()});
+      if (action.isSuccess && action.result is List) {
+        final items = action.result as List;
+        if (items.isEmpty) return _msg('📦 لم يتم العثور على أصناف مطابقة للبحث بالمستودع.', [action]);
+        final buf = StringBuffer('📦 قائمة الأصناف المتوفرة بالمستودع (${items.length} صنف):\n\n');
+        for (int i = 0; i < items.length && i < 15; i++) {
+          final it = items[i];
+          buf.writeln('${i + 1}. **${it['name']}** (${it['unit'] ?? 'حبة'}) — سعر البيع: ${it['sales_price']} ر.س | التكلفة: ${it['purchase_price']} ر.س');
+        }
+        return _msg(buf.toString().trim(), [action]);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 9. COST CENTERS & FIXED ASSETS
+    // -------------------------------------------------------------
+    if (p.contains('مركز تكلفة') && hasCreationVerb(p)) {
+      String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|أضف|اضف|مركز|تكلفة|التكلفة|جديد|اسمه)'), '').trim();
+      final action = await executeTool('create_cost_center', {'name': name.isEmpty ? 'مشروع جديد' : name});
+      return _resultMsg('✅ تم إنشاء مركز التكلفة "$name" بنجاح.', action);
+    }
+
+    if (p.contains('أصل') && hasCreationVerb(p)) {
+      String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|أضف|اضف|أصل|ثابت|جديد|اسمه)'), '').trim();
+      final action = await executeTool('create_fixed_asset', {
+        'name': name.isEmpty ? 'أصل رأسمالي جديد' : name,
+        'purchase_cost': extractAmount() ?? 5000.0,
+        'useful_life_years': 5,
+      });
+      return _resultMsg('✅ تم تسجيل الأصل الثابت "$name" في السجل العام بنجاح.', action);
+    }
+
+    // -------------------------------------------------------------
+    // 10. CHECKS PORTFOLIO LISTING (حافظة الشيكات)
+    // -------------------------------------------------------------
     if (p.contains('شيكات') || p.contains('الشيكات') || p.contains('حافظة الشيكات')) {
       final action = await executeTool('get_checks_list', {});
       if (action.isSuccess && action.result is List) {
@@ -807,7 +827,9 @@ class AiService {
       }
     }
 
-    // F. Chart of Accounts Tree (شجرة الحسابات)
+    // -------------------------------------------------------------
+    // 11. CHART OF ACCOUNTS (شجرة الحسابات)
+    // -------------------------------------------------------------
     if (p.contains('شجرة الحسابات') || p.contains('الحسابات') || p.contains('دليل الحسابات')) {
       final action = await executeTool('get_accounts_list', {});
       if (action.isSuccess && action.result is List) {
@@ -821,7 +843,9 @@ class AiService {
       }
     }
 
-    // G. Financial KPIs, Profit & Loss, Balance Snapshot
+    // -------------------------------------------------------------
+    // 12. FINANCIAL KPIS & SNAPSHOT (مؤشرات الأرباح)
+    // -------------------------------------------------------------
     if (p.contains('أرباح') || p.contains('ارباح') || p.contains('مبيعات') || p.contains('مصروفات') || p.contains('مؤشرات') || p.contains('صافي')) {
       final dashAction = await executeTool('get_dashboard_stats', {});
       if (dashAction.isSuccess && dashAction.result is Map) {

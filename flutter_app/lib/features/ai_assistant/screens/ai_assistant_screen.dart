@@ -8,7 +8,9 @@ import '../../../core/widgets/glass_card.dart';
 import '../models/ai_message.dart';
 import '../providers/ai_assistant_provider.dart';
 import '../services/ai_service.dart';
+import '../services/ai_voice_service.dart';
 import '../widgets/ai_settings_dialog.dart';
+import 'ai_voice_call_screen.dart';
 
 class AiAssistantScreen extends StatefulWidget {
   const AiAssistantScreen({super.key});
@@ -20,6 +22,7 @@ class AiAssistantScreen extends StatefulWidget {
 class _AiAssistantScreenState extends State<AiAssistantScreen> {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _isVoiceRecording = false;
 
   final List<String> _suggestedPrompts = [
     'أنشئ سند قبض بمبلغ 1500 ريال نقداً',
@@ -40,6 +43,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   void dispose() {
     _inputController.dispose();
     _scrollController.dispose();
+    AiVoiceService.stopListening();
     super.dispose();
   }
 
@@ -62,6 +66,51 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
     _inputController.clear();
     context.read<AiAssistantProvider>().sendMessage(prompt);
     _scrollToBottom();
+  }
+
+  void _toggleVoiceInput() async {
+    if (_isVoiceRecording) {
+      await AiVoiceService.stopListening();
+      setState(() {
+        _isVoiceRecording = false;
+      });
+      if (_inputController.text.trim().isNotEmpty) {
+        _handleSend();
+      }
+    } else {
+      final ok = await AiVoiceService.initialize();
+      if (!ok) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر الوصول للمايكروفون. يرجى التأكد من الصلاحيات.')),
+          );
+        }
+        return;
+      }
+
+      setState(() {
+        _isVoiceRecording = true;
+      });
+
+      await AiVoiceService.startListening(
+        onResult: (words) {
+          if (mounted) {
+            setState(() {
+              _inputController.text = words;
+            });
+          }
+        },
+        onStatus: (status) {
+          if (status == 'done' || status == 'notListening') {
+            if (mounted && _isVoiceRecording) {
+              setState(() {
+                _isVoiceRecording = false;
+              });
+            }
+          }
+        },
+      );
+    }
   }
 
   void _showSettings() {
@@ -121,6 +170,23 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
               ),
             ),
           ),
+          // Live Voice Call Action Button (📞)
+          IconButton(
+            icon: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.phone_in_talk_rounded, color: AppColors.secondary, size: 20),
+            ),
+            tooltip: 'بدء اتصال صوتي مباشر مع المساعد',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AiVoiceCallScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'إعدادات مفاتيح AI',
@@ -139,21 +205,22 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
           // Warning Banner if No API Key is set
           if (!ai.hasValidApiKey)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: AppColors.accent.withOpacity(isDark ? 0.2 : 0.1),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: AppColors.danger.withOpacity(0.1),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, color: AppColors.accent, size: 18),
-                  const SizedBox(width: 10),
+                  const Icon(Icons.info_outline, size: 18, color: AppColors.danger),
+                  const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'الرجاء إدخال مفتاح API (OpenAI, Gemini, أو Groq) لبدء التحدث وتنفيذ المهام المحاسبية.',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                      'ملاحظة: يمكنك إدخال مفتاحك الخاص بالضغط على الإعدادات ⚙️ أعلى الشاشة لتمكين النماذج الذكية المتقدمة.',
+                      style: TextStyle(fontSize: 12, color: AppColors.danger),
                     ),
                   ),
                   TextButton(
                     onPressed: _showSettings,
-                    child: const Text('إدخال المفتاح', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text('إدخال المفتاح', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -161,151 +228,170 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
 
           // Messages List
           Expanded(
-            child: ListView.separated(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(16),
-              itemCount: messages.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 14),
-              itemBuilder: (context, index) {
-                final msg = messages[index];
-                final isUser = msg.sender == MessageSender.user;
+            child: messages.isEmpty
+                ? const Center(child: Text('لا توجد رسائل سابقة'))
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = messages[index];
+                      final isUser = msg.sender == MessageSender.user;
 
-                return Row(
-                  mainAxisAlignment: isUser ? MainAxisAlignment.start : MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!isUser) ...[
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: AppColors.primary.withOpacity(0.15),
-                        child: const Icon(Icons.auto_awesome, color: AppColors.primary, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                    ],
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? AppColors.primary
-                              : isDark
-                                  ? AppColors.darkCard
-                                  : Colors.white,
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(16),
-                            topRight: const Radius.circular(16),
-                            bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(4),
-                            bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(16),
-                          ),
-                          border: isUser ? null : Border.all(color: AppColors.lightBorder),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (msg.isLoading || (msg.isStreaming && msg.text.isEmpty)) ...[
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const AppLoader(size: 16, strokeWidth: 2),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    msg.text.isNotEmpty ? msg.text : 'جارِ الاتصال بقاعدة البيانات وتوليد الرد...',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ] else ...[
-                              SelectableText.rich(
-                                TextSpan(
-                                  text: msg.text,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    height: 1.5,
-                                    color: isUser
-                                        ? Colors.white
-                                        : isDark
-                                            ? AppColors.darkTextPrimary
-                                            : AppColors.lightTextPrimary,
-                                  ),
-                                  children: [
-                                    if (msg.isStreaming)
-                                      const TextSpan(
-                                        text: ' ▍',
-                                        style: TextStyle(
-                                          color: AppColors.primary,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                  ],
+                            if (!isUser) ...[
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: const BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.auto_awesome, color: Colors.white, size: 18),
                                 ),
                               ),
+                              const SizedBox(width: 8),
                             ],
-
-                            // Render Executed Real ERP Actions if any
-                            if (msg.executedActions != null && msg.executedActions!.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              const Divider(height: 16),
-                              const Row(
-                                children: [
-                                  Icon(Icons.task_alt, color: AppColors.secondary, size: 16),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    'المهام المحاسبية المنفذة بالنظام:',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.secondaryDark),
+                            Flexible(
+                              child: Container(
+                                constraints: BoxConstraints(
+                                  maxWidth: MediaQuery.of(context).size.width * 0.78,
+                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: isUser
+                                      ? AppColors.primary
+                                      : (isDark ? AppColors.darkSurface : Colors.white),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: const Radius.circular(16),
+                                    topRight: const Radius.circular(16),
+                                    bottomLeft: Radius.circular(isUser ? 16 : 4),
+                                    bottomRight: Radius.circular(isUser ? 4 : 16),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              ...msg.executedActions!.map((action) {
-                                return Container(
-                                  margin: const EdgeInsets.only(top: 6),
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.secondary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.check, color: AppColors.secondaryDark, size: 16),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          'أداة: ${action.toolName} - تم التنفيذ والترحيل بنجاح',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                  border: isUser
+                                      ? null
+                                      : Border.all(color: AppColors.lightBorder),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.04),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                  children: [
+                                    if (msg.isLoading)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 4),
+                                        child: AppLoader(size: 20),
+                                      )
+                                    else
+                                      SelectableText(
+                                        msg.text + (msg.isStreaming ? ' ▍' : ''),
+                                        style: TextStyle(
+                                          color: isUser
+                                              ? Colors.white
+                                              : (isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary),
+                                          fontSize: 14,
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                    if (msg.executedActions != null && msg.executedActions!.isNotEmpty) ...[
+                                      const SizedBox(height: 10),
+                                      Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: (isDark ? Colors.black26 : Colors.grey.shade50),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: AppColors.secondary.withOpacity(0.3)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: const [
+                                                Icon(Icons.check_circle_outline, size: 14, color: AppColors.secondary),
+                                                SizedBox(width: 4),
+                                                Text(
+                                                  'المهام المحاسبية المنفذة بالنظام:',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: AppColors.secondary,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            ...msg.executedActions!.map((action) {
+                                              return Padding(
+                                                padding: const EdgeInsets.only(top: 2),
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      action.isSuccess ? Icons.done : Icons.error_outline,
+                                                      size: 12,
+                                                      color: action.isSuccess ? Colors.green : Colors.red,
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Expanded(
+                                                      child: Text(
+                                                        'أداة: ${action.toolName} - ${action.isSuccess ? "تم التنفيذ والترحيل بنجاح" : "تعذر التنفيذ"}',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: isDark ? Colors.white70 : Colors.black87,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }),
+                                          ],
                                         ),
                                       ),
                                     ],
-                                  ),
-                                );
-                              }),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      Formatters.formatTime(msg.timestamp),
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: isUser
+                                            ? Colors.white70
+                                            : (isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (isUser) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: AppColors.secondary.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.person, color: AppColors.secondaryDark, size: 20),
+                                ),
+                              ),
                             ],
                           ],
                         ),
-                      ),
-                    ),
-                    if (isUser) ...[
-                      const SizedBox(width: 10),
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: AppColors.secondary.withOpacity(0.2),
-                        child: const Icon(Icons.person, color: AppColors.secondaryDark, size: 18),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
+                      );
+                    },
+                  ),
           ),
 
           // Suggested Prompts Carousel
@@ -328,7 +414,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             ),
           ),
 
-          // Input Bar
+          // Input Bar with Mic & Send
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -338,15 +424,31 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             child: SafeArea(
               child: Row(
                 children: [
+                  // Microphone Speech Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _isVoiceRecording ? Colors.redAccent : AppColors.secondary.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: Icon(
+                        _isVoiceRecording ? Icons.mic_rounded : Icons.mic_none_rounded,
+                        color: _isVoiceRecording ? Colors.white : AppColors.secondaryDark,
+                      ),
+                      tooltip: _isVoiceRecording ? 'إيقاف التسجيل الصوتي' : 'تحدث صوتياً',
+                      onPressed: _toggleVoiceInput,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
                       controller: _inputController,
                       decoration: InputDecoration(
-                        hintText: 'اطلب من المساعد الذكي أي عملية أو استعلام مالي...',
+                        hintText: _isVoiceRecording ? '🎙️ جاري الاستماع إلى صوتك...' : 'اطلب من المساعد الذكي أي عملية أو استعلام مالي...',
                         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
-                          borderSide: BorderSide(color: AppColors.lightBorder),
+                          borderSide: BorderSide(color: _isVoiceRecording ? Colors.redAccent : AppColors.lightBorder),
                         ),
                       ),
                       maxLines: null,

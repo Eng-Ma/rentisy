@@ -45,6 +45,10 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>نحتاج للوصول للمايكروفون للتحدث الصوتي المباشر مع المساعد المحاسبي الذكي.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>نحتاج للتعرف على الصوت لتحويل كلامك إلى أوامر محاسبية ذكية.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

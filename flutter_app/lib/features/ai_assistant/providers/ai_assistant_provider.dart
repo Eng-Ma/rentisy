@@ -124,7 +124,10 @@ class AiAssistantProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> sendMessage(String text) async {
+  Future<void> sendMessage(
+    String text, {
+    Function(String fullResponse, List<AiToolAction>? actions)? onRealtimeSpokenResponse,
+  }) async {
     if (text.trim().isEmpty) return;
 
     final userMsg = AiMessage(
@@ -172,6 +175,10 @@ class AiAssistantProvider extends ChangeNotifier {
             isStreaming: !isDone,
           );
           notifyListeners();
+        }
+
+        if (isDone) {
+          onRealtimeSpokenResponse?.call(accumulatedText, accumulatedActions);
         }
       },
     );

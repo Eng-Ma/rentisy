@@ -33,5 +33,9 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>نحتاج للوصول للمايكروفون للتحدث الصوتي المباشر مع المساعد المحاسبي الذكي.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>نحتاج للتعرف على الصوت لتحويل كلامك إلى أوامر محاسبية ذكية.</string>
 </dict>
 </plist>

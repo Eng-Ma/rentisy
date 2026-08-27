@@ -3,6 +3,7 @@
 ## Overview
 - **Backend**: Laravel 11 / PHP 8.2+ with SQLite / MySQL support.
 - **Frontend**: Flutter 3.33+ Multi-platform (macOS, iOS, Android, Web).
+- **Android Package Name**: `com.accounting.codeit.gaza`
 - **Repository**: `https://github.com/Eng-Ma/rentisy.git` (main branch).
 
 ## Core Accounting Modules (12 Modules)

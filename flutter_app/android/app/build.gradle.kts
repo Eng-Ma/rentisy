@@ -15,9 +15,8 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.rentisy.accounting"
-    compileSdk = 34
-    ndkVersion = flutter.ndkVersion
+    namespace = "com.accounting.codeit.gaza"
+    compileSdk = flutter.compileSdkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -29,8 +28,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.rentisy.accounting"
-        minSdk = 21
+        applicationId = "com.accounting.codeit.gaza"
+        minSdk = flutter.minSdkVersion
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -54,7 +53,8 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

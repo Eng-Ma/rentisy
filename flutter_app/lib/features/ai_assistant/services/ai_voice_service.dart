@@ -1,18 +1,15 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 class AiVoiceService {
   static final SpeechToText _speech = SpeechToText();
-  static final FlutterTts _tts = FlutterTts();
 
   static bool _isSpeechInitialized = false;
-  static bool _isTtsInitialized = false;
   static bool isListening = false;
   static bool isSpeaking = false;
 
-  // Initialize Speech and TTS
+  // Initialize Speech
   static Future<bool> initialize() async {
     try {
       if (!_isSpeechInitialized) {
@@ -23,28 +20,6 @@ class AiVoiceService {
             isListening = val == 'listening';
           },
         );
-      }
-
-      if (!_isTtsInitialized) {
-        await _tts.setLanguage('ar-SA');
-        await _tts.setSpeechRate(0.5);
-        await _tts.setVolume(1.0);
-        await _tts.setPitch(1.0);
-
-        _tts.setStartHandler(() {
-          isSpeaking = true;
-        });
-
-        _tts.setCompletionHandler(() {
-          isSpeaking = false;
-        });
-
-        _tts.setErrorHandler((msg) {
-          isSpeaking = false;
-          debugPrint('TTS Error: $msg');
-        });
-
-        _isTtsInitialized = true;
       }
 
       return _isSpeechInitialized;
@@ -133,51 +108,13 @@ class AiVoiceService {
   static bool enableVoiceAudio = false;
 
   static Future<void> speak(String text, {Function()? onComplete}) async {
-    if (!enableVoiceAudio) {
-      // Stay silent and trigger completion immediately for instant visual flow
-      onComplete?.call();
-      return;
-    }
-
-    if (!_isTtsInitialized) {
-      await initialize();
-    }
-
-    try {
-      final cleanText = text
-          .replaceAll(RegExp(r'\*+'), '')
-          .replaceAll(RegExp(r'#+'), '')
-          .replaceAll(RegExp(r'•'), '')
-          .replaceAll(RegExp(r'[✅❌📊🔍⚡🌳📑🧾👥📦🗄️]'), '')
-          .trim();
-
-      if (cleanText.isEmpty) {
-        onComplete?.call();
-        return;
-      }
-
-      isSpeaking = true;
-      if (onComplete != null) {
-        _tts.setCompletionHandler(() {
-          isSpeaking = false;
-          onComplete();
-        });
-      }
-
-      await _tts.speak(cleanText);
-    } catch (e) {
-      isSpeaking = false;
-      onComplete?.call();
-      debugPrint('TTS Speak Error: $e');
-    }
+    // Silent mode for immediate visual execution
+    onComplete?.call();
   }
 
   // Stop speaking
   static Future<void> stopSpeaking() async {
-    if (isSpeaking) {
-      await _tts.stop();
-      isSpeaking = false;
-    }
+    isSpeaking = false;
   }
 
   // Dispose all

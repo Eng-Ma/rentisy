@@ -16,7 +16,8 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.accounting.codeit.gaza"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 34
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -29,7 +30,7 @@ android {
 
     defaultConfig {
         applicationId = "com.accounting.codeit.gaza"
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         targetSdk = 34
         versionCode = flutter.versionCode
         versionName = flutter.versionName

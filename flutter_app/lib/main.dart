@@ -17,6 +17,7 @@ import 'features/parties/providers/parties_provider.dart';
 import 'features/reports/providers/reports_provider.dart';
 import 'features/ai_assistant/providers/ai_assistant_provider.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/splash/screens/splash_screen.dart';
 import 'shell/app_shell.dart';
 
 void main() async {
@@ -49,7 +50,7 @@ class AccountingErpApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
-            title: 'نظام المحاسبة وإدارة المستودعات',
+            title: 'حسيب | النظام المحاسبي وإدارة الأعمال ERP',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
@@ -70,7 +71,7 @@ class AccountingErpApp extends StatelessWidget {
                 child: child ?? const SizedBox.shrink(),
               );
             },
-            home: const AppEntrypoint(),
+            home: const SplashScreen(),
           );
         },
       ),

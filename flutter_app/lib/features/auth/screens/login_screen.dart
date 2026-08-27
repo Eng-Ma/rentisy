@@ -183,38 +183,39 @@ class _LoginScreenState extends State<LoginScreen> {
                           // App Logo & Title
                           Center(
                             child: Container(
-                              width: 68,
-                              height: 68,
+                              width: 80,
+                              height: 80,
                               decoration: BoxDecoration(
-                                gradient: AppColors.primaryGradient,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(22),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.primary.withOpacity(0.4),
-                                    blurRadius: 16,
+                                    color: AppColors.primary.withValues(alpha: 0.35),
+                                    blurRadius: 18,
                                     offset: const Offset(0, 6),
                                   ),
                                 ],
                               ),
-                              child: const Icon(
-                                Icons.account_balance_wallet_rounded,
-                                color: Colors.white,
-                                size: 36,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(22),
+                                child: Image.asset(
+                                  'assets/images/logo.png',
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
                           ),
                           const SizedBox(height: 20),
                           const Text(
-                            'نظام المحاسبة والمستودعات',
+                            'حسيب للمحاسبة',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 24,
+                              fontSize: 26,
                               fontWeight: FontWeight.w900,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'برنامج المحاسبة وإدارة المستودعات الشامل',
+                            'المحاسب المالي ونظام إدارة الأعمال الذكي ERP',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,

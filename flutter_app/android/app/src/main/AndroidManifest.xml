@@ -9,7 +9,7 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
 
     <application
-        android:label="رينتيسي للمحاسبة"
+        android:label="حسيب للمحاسبة"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

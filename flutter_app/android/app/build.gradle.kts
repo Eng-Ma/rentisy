@@ -41,7 +41,8 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
+                val rawStoreFile = keystoreProperties["storeFile"] as String
+                storeFile = if (file(rawStoreFile).exists()) file(rawStoreFile) else rootProject.file("app/$rawStoreFile")
                 storePassword = keystoreProperties["storePassword"] as String
             }
         }

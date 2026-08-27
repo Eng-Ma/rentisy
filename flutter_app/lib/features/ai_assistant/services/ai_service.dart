@@ -477,6 +477,34 @@ class AiService {
       return null;
     }
 
+    // Helper: Robust Name / Title Extraction
+    String extractCleanEntityName(String text) {
+      String t = text;
+      // 1. If explicitly contains "اسمه" or "باسم" or "اسم"
+      final namedMatch = RegExp(r'(?:اسمه|باسم|اسم|يدعى|المدعو)\s+([^\d,\n]+)', caseSensitive: false).firstMatch(t);
+      if (namedMatch != null) {
+        String n = namedMatch.group(1)!.trim();
+        n = n.replaceAll(RegExp(r'(?:وهاتفه|ورقمه|وجواله|هاتفه|رقمه|بسعر|سعر|سعرها|سعر بيع|على النظام|في النظام|بالنظام|جديد|جديدة).*$'), '').trim();
+        if (n.isNotEmpty) return n;
+      }
+
+      // 2. If phrased after keyword like "عميل" or "مورد" or "صنف"
+      final afterKeywordMatch = RegExp(r'(?:عميل|مورد|زبون|صنف|منتج|حساب)\s+(?:جديد\s+|جديدة\s+)?([^\d,\n]+)', caseSensitive: false).firstMatch(t);
+      if (afterKeywordMatch != null) {
+        String n = afterKeywordMatch.group(1)!.trim();
+        n = n.replaceAll(RegExp(r'^(?:على النظام|في النظام|بالنظام|اسمه|باسم|جديد|جديدة)\s*'), '').trim();
+        n = n.replaceAll(RegExp(r'(?:وهاتفه|ورقمه|وجواله|هاتفه|رقمه|بسعر|سعر|سعرها|سعر بيع|على النظام|في النظام|بالنظام|جديد|جديدة).*$'), '').trim();
+        if (n.isNotEmpty) return n;
+      }
+
+      // 3. Fallback: Strip command prefixes
+      String cleaned = t.replaceAll(RegExp(r'^(?:يا\s+\w+\s+|بدي\s+|أريد\s+|اريد\s+|ابغى\s+|ابغي\s+|ممكن\s+|لو سمحت\s+|تضيف\s+|تضيفلي\s+|تضيف لي\s+|تسجل\s+|تسجلي\s+|تسجل لي\s+|تعمل\s+|تعملي\s+|تعمل لي\s+|حط\s+|حطلي\s+|سوي\s+|سويلي\s+|ضيف\s+|أضف\s+|اضف\s+|سجل\s+|أنشئ\s+|انشئ\s+)+'), '').trim();
+      cleaned = cleaned.replaceAll(RegExp(r'(?:عميل|مورد|زبون|صنف|منتج)\s+'), '').trim();
+      cleaned = cleaned.replaceAll(RegExp(r'(?:على النظام|في النظام|بالنظام|جديد|جديدة)'), '').trim();
+      cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
+      return cleaned;
+    }
+
     // -------------------------------------------------------------
     // -1. FAST-PATH CONVERSATIONAL CHIT-CHAT & GREETINGS (كلام عادي / ترحيب / شكر - استجابة فورية 0ms)
     // -------------------------------------------------------------
@@ -910,6 +938,8 @@ class AiService {
     // -------------------------------------------------------------
     // 7. PARTIES: CUSTOMERS & SUPPLIERS (العملاء والموردين والناس والزبائن)
     // -------------------------------------------------------------
+    // 7. PARTIES: CUSTOMERS & SUPPLIERS (العملاء والموردين والناس والزبائن)
+    // -------------------------------------------------------------
     if (p.contains('عميل') || p.contains('مورد') || p.contains('عملاء') || p.contains('موردين') ||
         p.contains('زبون') || p.contains('زبائن') || p.contains('الناس') || p.contains('أشخاص') ||
         p.contains('اشخاص') || p.contains('أطراف') || p.contains('اطراف') || p.contains('الشركات') ||
@@ -918,7 +948,7 @@ class AiService {
       if (isCreating && !hasListingVerb(p) && !p.contains('كل') && !p.contains('هات')) {
         final isVendor = p.contains('مورد');
         final phone = extractPhone();
-        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|عميل|مورد|زبون|جديد|جديدة|اسمه|باسم|شركة|مؤسسة|هاتفه|رقم|جوال)'), '').trim();
+        String name = extractCleanEntityName(p);
         if (phone != null) name = name.replaceAll(phone, '').trim();
         if (name.isEmpty) name = isVendor ? 'مورد جديد' : 'عميل جديد';
 
@@ -955,7 +985,7 @@ class AiService {
       final isCreating = hasCreationVerb(p);
       if (isCreating && !hasListingVerb(p)) {
         final price = extractAmount() ?? 100.0;
-        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|صنف|منتج|جديد|جديدة|اسمه|باسم|سعره|سعر|ريال|ر.س)'), '').trim();
+        String name = extractCleanEntityName(p);
         name = name.replaceAll(price.toString(), '').replaceAll(price.toInt().toString(), '').trim();
         if (name.isEmpty) name = 'صنف جديد';
 

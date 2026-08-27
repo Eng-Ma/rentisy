@@ -74,4 +74,9 @@ class ApiEndpoints {
   static String get reportCostCenters => '$baseUrl/reports/cost-centers';
   static String get reportChecks => '$baseUrl/reports/checks';
   static String get reportStockMovement => '$baseUrl/reports/stock-movement';
+
+  // AI Direct Database Superpowers
+  static String get aiSchema => '$baseUrl/ai/schema';
+  static String get aiQuery => '$baseUrl/ai/query';
+  static String get aiSearch => '$baseUrl/ai/search';
 }

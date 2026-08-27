@@ -209,13 +209,14 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (msg.isLoading) ...[
+                            if (msg.isLoading || (msg.isStreaming && msg.text.isEmpty)) ...[
                               Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   const AppLoader(size: 16, strokeWidth: 2),
                                   const SizedBox(width: 10),
                                   Text(
-                                    msg.text,
+                                    msg.text.isNotEmpty ? msg.text : 'جارِ الاتصال بقاعدة البيانات وتوليد الرد...',
                                     style: TextStyle(
                                       fontSize: 13,
                                       color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
@@ -224,16 +225,28 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                                 ],
                               ),
                             ] else ...[
-                              SelectableText(
-                                msg.text,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  height: 1.5,
-                                  color: isUser
-                                      ? Colors.white
-                                      : isDark
-                                          ? AppColors.darkTextPrimary
-                                          : AppColors.lightTextPrimary,
+                              SelectableText.rich(
+                                TextSpan(
+                                  text: msg.text,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    height: 1.5,
+                                    color: isUser
+                                        ? Colors.white
+                                        : isDark
+                                            ? AppColors.darkTextPrimary
+                                            : AppColors.lightTextPrimary,
+                                  ),
+                                  children: [
+                                    if (msg.isStreaming)
+                                      const TextSpan(
+                                        text: ' ▍',
+                                        style: TextStyle(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],

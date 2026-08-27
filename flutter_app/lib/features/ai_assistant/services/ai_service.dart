@@ -115,22 +115,19 @@ class AiService {
     required String model,
     required Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
   }) async {
-    // 1. Direct Deterministic Intent Engine
+    // 1. Direct Deterministic Intent & SQL Engine
     final directResult = await tryExecuteDirectAccountingIntent(prompt);
     if (directResult != null) {
-      // Simulate real-time streaming effect for instant local execution
       final fullText = directResult.text;
       final words = fullText.split(' ');
-      String accumulated = '';
       for (int i = 0; i < words.length; i++) {
-        accumulated += (i == 0 ? '' : ' ') + words[i];
         final isLast = i == words.length - 1;
         onChunk(
           words[i] + (isLast ? '' : ' '),
           actions: isLast ? directResult.executedActions : null,
           isDone: isLast,
         );
-        await Future.delayed(const Duration(milliseconds: 20));
+        await Future.delayed(const Duration(milliseconds: 16));
       }
       return;
     }
@@ -141,7 +138,7 @@ class AiService {
       return;
     }
 
-    // 3. Stream from LLM Provider
+    // 3. Stream from LLM Provider with Live DB SQL Integration
     try {
       if (provider == AiProviderType.gemini) {
         await _streamGemini(prompt, history, apiKey, model, onChunk);
@@ -174,7 +171,7 @@ class AiService {
       final messages = [
         {
           'role': 'system',
-          'content': 'أنت محاسب مالي ذكي وخبير في النظام. أجب باختصار شديد واحترافية وبالأرقام المالية المباشرة دون إطالة.'
+          'content': 'أنت محاسب مالي ذكي وخبير ولديك وصول مباشر لقاعدة البيانات وجداول النظام (accounts, invoices, vouchers, parties, items, checks, journal_entries). أجب باختصار شديد واحترافية وبالأرقام المالية المباشرة.'
         },
         ...history.where((m) => !m.isLoading).map((m) {
           return {
@@ -253,7 +250,7 @@ class AiService {
         }),
         {
           'role': 'user',
-          'parts': [{'text': 'أنت محاسب مالي ذكي وخبير. أجب باختصار شديد ومباشر:\n$prompt'}],
+          'parts': [{'text': 'أنت محاسب مالي ذكي ولديك وصول مباشر لقاعدة البيانات. أجب باختصار شديد ومباشر:\n$prompt'}],
         }
       ];
 
@@ -303,11 +300,76 @@ class AiService {
   }
 
   // =========================================================================
-  // --- COMPLETE DETERMINISTIC ERP INTENT ENGINE (ADD, EDIT, DELETE, SEARCH) ---
+  // --- COMPLETE DETERMINISTIC ERP & DIRECT SQL DATABASE ENGINE ---
   // =========================================================================
   static Future<AiMessage?> tryExecuteDirectAccountingIntent(String prompt) async {
     final p = prompt.trim();
-    final lower = p.toLowerCase();
+    final upper = p.toUpperCase();
+
+    // -------------------------------------------------------------
+    // 0. DIRECT RAW SQL EXECUTION (SELECT / UPDATE / INSERT / DELETE)
+    // -------------------------------------------------------------
+    if (upper.startsWith('SELECT ') || upper.startsWith('PRAGMA ') || upper.startsWith('SHOW ') || upper.startsWith('UPDATE ') || upper.startsWith('INSERT ') || upper.startsWith('DELETE FROM')) {
+      final action = await executeTool('execute_sql_query', {'query': p});
+      if (action.isSuccess && action.result is Map) {
+        final res = action.result as Map;
+        if (res['type'] == 'read' && res['data'] is List) {
+          final rows = res['data'] as List;
+          if (rows.isEmpty) {
+            return _msg('🔍 تم تنفيذ الاستعلام بنجاح. النتيجة: 0 سجلات (لا توجد بيانات مطابقة).', [action]);
+          }
+          final buf = StringBuffer('⚡ نتيجة استعلام قاعدة البيانات المباشر (${rows.length} سجل):\n\n');
+          for (int i = 0; i < rows.length && i < 20; i++) {
+            final row = rows[i];
+            buf.writeln('${i + 1}. $row');
+          }
+          return _msg(buf.toString().trim(), [action]);
+        } else {
+          return _msg('✅ ${res['message'] ?? 'تم تنفيذ استعلام SQL بنجاح.'}', [action]);
+        }
+      } else {
+        return _msg('تعذر تنفيذ الاستعلام: ${action.result}', [action]);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 0.1 DATABASE SCHEMA INSPECTOR (فحص هيكلية قاعدة البيانات وجداولها)
+    // -------------------------------------------------------------
+    if (p.contains('هيكلية قاعدة البيانات') || p.contains('جداول قاعدة البيانات') || p.contains('فحص قاعدة البيانات') || p.contains('database schema') || p.contains('tables')) {
+      final action = await executeTool('get_database_schema', {});
+      if (action.isSuccess && action.result is Map) {
+        final tables = (action.result['tables'] as Map?) ?? {};
+        final driver = action.result['driver'] ?? 'Database';
+        final buf = StringBuffer('🗄️ هيكلية قاعدة البيانات المباشرة ($driver) — عدد الجداول: ${tables.length}:\n\n');
+        tables.forEach((tableName, info) {
+          final count = info['row_count'] ?? 0;
+          final cols = (info['columns'] as List?)?.map((c) => c['name']).join(', ') ?? '';
+          buf.writeln('• جدول **`$tableName`** ($count سجل) ➔ أعمدة: `$cols`');
+        });
+        return _msg(buf.toString().trim(), [action]);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 0.2 GLOBAL UNIVERSAL DATABASE SEARCH (بحث شامل في كل الجداول)
+    // -------------------------------------------------------------
+    if (p.startsWith('ابحث في قاعدة البيانات عن') || p.startsWith('ابحث في كل الجداول عن') || p.startsWith('بحث شامل عن')) {
+      final term = p.replaceAll(RegExp(r'(ابحث في قاعدة البيانات عن|ابحث في كل الجداول عن|بحث شامل عن|ابحث عن|بحث عن)'), '').trim();
+      final action = await executeTool('global_database_search', {'q': term});
+      if (action.isSuccess && action.result is Map) {
+        final res = action.result['results'] as Map? ?? {};
+        if (res.isEmpty) return _msg('🔍 لم يتم العثور على أي نتائج لكلمة "$term" في أي جدول بقاعدة البيانات.', [action]);
+        final buf = StringBuffer('🔍 نتائج البحث الشامل في قاعدة البيانات عن "$term":\n\n');
+        res.forEach((table, records) {
+          buf.writeln('📂 **جدول $table** (${(records as List).length} نتيجة):');
+          for (final r in records) {
+            buf.writeln('  • ${r.toString()}');
+          }
+          buf.writeln();
+        });
+        return _msg(buf.toString().trim(), [action]);
+      }
+    }
 
     // Helper: Extract ID numbers (e.g. "رقم 5", "#5", "5")
     int? extractId() {
@@ -328,7 +390,7 @@ class AiService {
     // -------------------------------------------------------------
     // 1. DELETE ACTIONS (حذف أي عنصر من الـ 12 شاشة)
     // -------------------------------------------------------------
-    if (p.contains('احذف') || p.contains('حذف') || p.contains('مسح') || lower.contains('delete')) {
+    if (p.contains('احذف') || p.contains('حذف') || p.contains('مسح')) {
       final id = extractId();
       if (id != null) {
         if (p.contains('سند')) {
@@ -605,7 +667,7 @@ class AiService {
       }
     }
 
-    return null; // Forward to LLM for other general conversations
+    return null; // Forward to LLM for other queries
   }
 
   static AiMessage _resultMsg(String text, AiToolAction action) {
@@ -629,11 +691,24 @@ class AiService {
   }
 
   // =========================================================================
-  // --- REAL REST API EXECUTOR FOR ALL 12 ERP MODULES ---
+  // --- REAL REST API & DIRECT SQL EXECUTOR FOR ALL ERP MODULES ---
   // =========================================================================
   static Future<AiToolAction> executeTool(String toolName, Map<String, dynamic> args) async {
     try {
       switch (toolName) {
+        // --- 0. Direct SQL & Database Queries ---
+        case 'execute_sql_query':
+          final res = await ApiService.post(ApiEndpoints.aiQuery, body: {'query': args['query']});
+          return AiToolAction(toolName: 'Direct SQL Engine', arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+
+        case 'get_database_schema':
+          final res = await ApiService.get(ApiEndpoints.aiSchema);
+          return AiToolAction(toolName: 'Database Schema Inspector', arguments: args, result: res.rawJson, isSuccess: res.success);
+
+        case 'global_database_search':
+          final res = await ApiService.post(ApiEndpoints.aiSearch, body: {'q': args['q']});
+          return AiToolAction(toolName: 'Global DB Search', arguments: args, result: res.rawJson, isSuccess: res.success);
+
         // --- 1. Dashboard & Reports ---
         case 'get_dashboard_stats':
           final res = await ApiService.get(ApiEndpoints.dashboard);

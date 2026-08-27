@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\QuotationApiController;
 use App\Http\Controllers\Api\FixedAssetApiController;
 use App\Http\Controllers\Api\CostCenterApiController;
 use App\Http\Controllers\Api\ReportApiController;
+use App\Http\Controllers\Api\AiDatabaseApiController;
 use App\Http\Middleware\ApiTokenAuth;
 
 // Public Auth routes
@@ -117,4 +118,9 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
     Route::get('/reports/cost-centers', [ReportApiController::class, 'costCenters']);
     Route::get('/reports/checks', [ReportApiController::class, 'checks']);
     Route::get('/reports/stock-movement', [ReportApiController::class, 'stockMovement']);
+
+    // Direct AI Database Superpowers (Direct SQL, Schema, Global Search)
+    Route::get('/ai/schema', [AiDatabaseApiController::class, 'schema']);
+    Route::post('/ai/query', [AiDatabaseApiController::class, 'executeQuery']);
+    Route::post('/ai/search', [AiDatabaseApiController::class, 'globalSearch']);
 });

@@ -134,29 +134,48 @@ class AiAssistantProvider extends ChangeNotifier {
       timestamp: DateTime.now(),
     );
 
-    final loadingMsg = AiMessage(
-      id: 'loading_${DateTime.now().millisecondsSinceEpoch}',
+    final assistantMsgId = 'asst_${DateTime.now().millisecondsSinceEpoch}';
+    final initialAssistantMsg = AiMessage(
+      id: assistantMsgId,
       sender: MessageSender.assistant,
-      text: 'جارِ التفكير وتنفيذ العمليات المطلوبة في نظام المحاسبة...',
+      text: '',
       timestamp: DateTime.now(),
-      isLoading: true,
+      isLoading: false,
+      isStreaming: true,
     );
 
     _messages.add(userMsg);
-    _messages.add(loadingMsg);
+    _messages.add(initialAssistantMsg);
     _isLoading = true;
     notifyListeners();
 
-    final response = await AiService.sendMessage(
+    String accumulatedText = '';
+    List<AiToolAction> accumulatedActions = [];
+
+    await AiService.sendMessageStream(
       prompt: text.trim(),
-      history: _messages.where((m) => m.id != userMsg.id && !m.isLoading).toList(),
+      history: _messages.where((m) => m.id != userMsg.id && m.id != assistantMsgId && !m.isLoading).toList(),
       provider: _selectedProvider,
       apiKey: currentApiKey,
       model: currentModel,
+      onChunk: (chunk, {actions, isDone = false}) {
+        accumulatedText += chunk;
+        if (actions != null && actions.isNotEmpty) {
+          accumulatedActions.addAll(actions);
+        }
+
+        final index = _messages.indexWhere((m) => m.id == assistantMsgId);
+        if (index != -1) {
+          _messages[index] = _messages[index].copyWith(
+            text: accumulatedText,
+            executedActions: accumulatedActions.isNotEmpty ? accumulatedActions : null,
+            isStreaming: !isDone,
+          );
+          notifyListeners();
+        }
+      },
     );
 
-    _messages.removeWhere((m) => m.isLoading);
-    _messages.add(response);
     _isLoading = false;
     notifyListeners();
   }

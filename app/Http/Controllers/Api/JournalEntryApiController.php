@@ -45,9 +45,20 @@ class JournalEntryApiController extends Controller
             'data' => $journalEntry->load(['currency', 'lines.account', 'lines.costCenter']),
         ]);
     }
-
     public function store(Request $request)
     {
+        // Smart Defaults for API / AI
+        if (!$request->has('currency_id')) {
+            $defaultCurrency = Currency::where('is_default', true)->first() ?? Currency::first();
+            $request->merge(['currency_id' => $defaultCurrency?->id]);
+        }
+        if (!$request->has('exchange_rate')) {
+            $request->merge(['exchange_rate' => 1.0]);
+        }
+        if (!$request->has('date')) {
+            $request->merge(['date' => date('Y-m-d')]);
+        }
+
         $validated = $request->validate([
             'date' => 'required|date',
             'reference' => 'nullable|string',
@@ -108,5 +119,18 @@ class JournalEntryApiController extends Controller
             'message' => 'تم حفظ وترحيل قيد اليومية بنجاح',
             'data' => $entry->load(['currency', 'lines.account', 'lines.costCenter']),
         ], 201);
+    }
+
+    public function destroy(JournalEntry $journalEntry)
+    {
+        DB::transaction(function () use ($journalEntry) {
+            $journalEntry->lines()->delete();
+            $journalEntry->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم حذف قيد اليومية بنجاح',
+        ]);
     }
 }

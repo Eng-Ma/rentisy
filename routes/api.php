@@ -42,6 +42,7 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
     Route::get('/journal-entries', [JournalEntryApiController::class, 'index']);
     Route::post('/journal-entries', [JournalEntryApiController::class, 'store']);
     Route::get('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'show']);
+    Route::delete('/journal-entries/{journalEntry}', [JournalEntryApiController::class, 'destroy']);
 
     // Cost Centers
     Route::get('/cost-centers', [CostCenterApiController::class, 'index']);
@@ -91,6 +92,7 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
     Route::get('/invoices', [InvoiceApiController::class, 'index']);
     Route::post('/invoices', [InvoiceApiController::class, 'store']);
     Route::get('/invoices/{invoice}', [InvoiceApiController::class, 'show']);
+    Route::delete('/invoices/{invoice}', [InvoiceApiController::class, 'destroy']);
 
     // Quotations (عروض الأسعار)
     Route::get('/quotations', [QuotationApiController::class, 'index']);

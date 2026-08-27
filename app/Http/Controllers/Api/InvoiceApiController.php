@@ -181,4 +181,31 @@ class InvoiceApiController extends Controller
             'data' => $invoice->load(['party', 'store', 'lines.item', 'journalEntry']),
         ], 201);
     }
+
+    public function destroy(Invoice $invoice)
+    {
+        DB::transaction(function () use ($invoice) {
+            foreach ($invoice->lines as $line) {
+                \App\Models\StoreItem::where('store_id', $invoice->store_id)
+                    ->where('item_id', $line->item_id)
+                    ->decrement('quantity', in_array($invoice->type, ['purchase', 'sale_return']) ? $line->quantity : -$line->quantity);
+            }
+
+            if ($invoice->journal_entry_id) {
+                $entry = JournalEntry::find($invoice->journal_entry_id);
+                if ($entry) {
+                    $entry->lines()->delete();
+                    $entry->delete();
+                }
+            }
+
+            $invoice->lines()->delete();
+            $invoice->delete();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم حذف الفاتورة وإلغاء تأثيرها المخزني والمحاسبي بنجاح',
+        ]);
+    }
 }

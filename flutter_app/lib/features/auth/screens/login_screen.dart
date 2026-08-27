@@ -126,20 +126,21 @@ class _LoginScreenState extends State<LoginScreen> {
     final authProvider = context.watch<AuthProvider>();
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.darkBackground : const Color(0xFFF1F5F9),
       body: Stack(
         children: [
-          // Background Gradient Circles
+          // Background Gradient Circles for Light & Dark
           Positioned(
-            top: -100,
-            right: -100,
+            top: -80,
+            right: -80,
             child: Container(
-              width: 300,
-              height: 300,
+              width: 320,
+              height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.primary.withOpacity(isDark ? 0.3 : 0.2),
+                    AppColors.primary.withOpacity(isDark ? 0.3 : 0.12),
                     Colors.transparent,
                   ],
                 ),
@@ -147,16 +148,16 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           Positioned(
-            bottom: -100,
-            left: -100,
+            bottom: -80,
+            left: -80,
             child: Container(
-              width: 300,
-              height: 300,
+              width: 320,
+              height: 320,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppColors.secondary.withOpacity(isDark ? 0.25 : 0.15),
+                    AppColors.secondary.withOpacity(isDark ? 0.25 : 0.12),
                     Colors.transparent,
                   ],
                 ),

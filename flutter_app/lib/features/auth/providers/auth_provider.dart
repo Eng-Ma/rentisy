@@ -7,7 +7,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   Map<String, dynamic>? _user;
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light;
 
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
@@ -35,12 +35,10 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString('theme_mode');
-    if (mode == 'light') {
-      _themeMode = ThemeMode.light;
-    } else if (mode == 'dark') {
+    if (mode == 'dark') {
       _themeMode = ThemeMode.dark;
     } else {
-      _themeMode = ThemeMode.system;
+      _themeMode = ThemeMode.light;
     }
     notifyListeners();
   }

@@ -110,14 +110,15 @@ class AiService {
       final dashRes = await ApiService.get(ApiEndpoints.dashboard);
       if (dashRes.success && dashRes.rawJson is Map) {
         final d = dashRes.rawJson as Map<String, dynamic>;
-        final sales = d['total_sales'] ?? d['sales'] ?? 0;
-        final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
-        final profit = d['net_profit'] ?? d['profit'] ?? 0;
-        final expenses = d['total_expenses'] ?? d['expenses'] ?? 0;
-        final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
-        final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
-        final invCount = d['total_invoices_count'] ?? 0;
-        final vouchCount = d['total_vouchers_count'] ?? 0;
+        final stats = (d['stats'] as Map<String, dynamic>?) ?? d;
+        final sales = stats['total_sales'] ?? 0;
+        final purchases = stats['total_purchases'] ?? 0;
+        final profit = stats['net_profit'] ?? 0;
+        final expenses = stats['total_expenses'] ?? stats['total_expense'] ?? 0;
+        final cash = stats['cash_balance'] ?? 0;
+        final receivables = stats['customer_receivables'] ?? 0;
+        final invCount = stats['total_invoices_count'] ?? 0;
+        final vouchCount = stats['total_vouchers_count'] ?? 0;
 
         return '''
 أنت المحاسب المالي الذكي وخبير ERP لنظام المحاسبة وإدارة المستودعات.
@@ -131,7 +132,7 @@ class AiService {
 - إجمالي المصروفات: $expenses ر.س
 - رصيد الصندوق والبنوك: $cash ر.س
 - ذمم وديون العملاء: $receivables ر.س
-- إجمالي الفواتير: $invCount | إجمالي السندات: $vouchCount
+- إجمالي الفواتير المسجلة: $invCount | إجمالي السندات المسجلة: $vouchCount
 
 أجب باختصار شديد، باللغة العربية، وبالأرقام المالية المباشرة والواضحة.
 ''';
@@ -175,12 +176,15 @@ class AiService {
       final dashAction = await executeTool('get_dashboard_stats', {});
       if (dashAction.isSuccess && dashAction.result is Map) {
         final d = dashAction.result as Map<String, dynamic>;
-        final sales = d['total_sales'] ?? d['sales'] ?? 0;
-        final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
-        final profit = d['net_profit'] ?? d['profit'] ?? 0;
-        final expenses = d['total_expenses'] ?? d['expenses'] ?? 0;
-        final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
-        final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
+        final stats = (d['stats'] as Map<String, dynamic>?) ?? d;
+        final sales = stats['total_sales'] ?? 0;
+        final purchases = stats['total_purchases'] ?? 0;
+        final profit = stats['net_profit'] ?? 0;
+        final expenses = stats['total_expenses'] ?? stats['total_expense'] ?? 0;
+        final cash = stats['cash_balance'] ?? 0;
+        final receivables = stats['customer_receivables'] ?? 0;
+        final vouchCount = stats['total_vouchers_count'] ?? 0;
+        final invCount = stats['total_invoices_count'] ?? 0;
 
         final fullText = '''
 📊 إليك بياناتك المالية الحقيقية المستخرجة مباشرة من قاعدة البيانات:
@@ -190,6 +194,7 @@ class AiService {
 • إجمالي المصروفات: $expenses ر.س
 • رصيد الصندوق والبنوك: $cash ر.س
 • ذمم وديون العملاء: $receivables ر.س
+• عدد السندات المسجلة: $vouchCount سند | عدد الفواتير: $invCount فاتورة
 
 (جميع البيانات أعلاه حية ومحدثة من قيود وفواتير النظام الحقيقية).
 ''';
@@ -559,7 +564,8 @@ class AiService {
     // -------------------------------------------------------------
     // 5. VOUCHERS CREATION (إنشاء سند قبض / سند صرف)
     // -------------------------------------------------------------
-    if (p.contains('سند قبض') || p.contains('سند صرف') || (p.contains('سند') && (p.contains('قبض') || p.contains('صرف')))) {
+    if ((p.contains('سند قبض') || p.contains('سند صرف') || (p.contains('سند') && (p.contains('قبض') || p.contains('صرف')))) &&
+        (p.contains('أنشئ') || p.contains('انشئ') || p.contains('أضف') || p.contains('اضف') || p.contains('سجل') || p.contains('بمبلغ'))) {
       final isPayment = p.contains('صرف');
       final amount = extractAmount();
       if (amount != null && amount > 0) {
@@ -659,7 +665,53 @@ class AiService {
     // 10. ADVANCED SEARCH & FILTERING & QUERIES (فحص واستعلام وفلترة)
     // -------------------------------------------------------------
 
-    // A. Warehouse Items Search & Filter
+    // A. Vouchers Listing / Query (سندات القبض والصرف)
+    if (p.contains('سندات') || p.contains('السندات') || p.contains('سند قبض') || p.contains('سند صرف') || p.contains('سندات القبض') || p.contains('سندات الصرف')) {
+      final isReceipt = p.contains('قبض');
+      final isPayment = p.contains('صرف');
+      String? type;
+      if (isReceipt && !isPayment) type = 'receipt';
+      if (isPayment && !isReceipt) type = 'payment';
+
+      final action = await executeTool('get_vouchers', type != null ? {'type': type} : {});
+      final list = action.result is List ? (action.result as List) : ((action.result is Map && action.result['data'] is List) ? action.result['data'] as List : []);
+      if (list.isEmpty) {
+        return _msg('📑 لا توجد سندات مسجلة حالياً بهذا النوع في النظام.', [action]);
+      }
+      final buf = StringBuffer('📑 قائمة سندات النظام المسجلة (${list.length} سند):\n\n');
+      for (int i = 0; i < list.length && i < 15; i++) {
+        final v = list[i];
+        final num = v['voucher_number'] ?? '#${v['id']}';
+        final vType = v['type'] == 'receipt' ? 'سند قبض' : 'سند صرف';
+        final amt = v['amount'] ?? 0;
+        final method = v['payment_method'] == 'bank' ? 'بنكي' : (v['payment_method'] == 'check' ? 'شيك' : 'نقدي');
+        final partyName = v['party'] is Map ? v['party']['name'] : 'طرف عام';
+        final date = v['date'] ?? '';
+        buf.writeln('${i + 1}. **$num** ($vType) — المبلغ: $amt ر.س ($method) | الطرف: $partyName | التاريخ: $date');
+      }
+      return _msg(buf.toString().trim(), [action]);
+    }
+
+    // B. Invoices Listing / Query (الفواتير)
+    if (p.contains('فواتير') || p.contains('الفواتير') || p.contains('فواتير المبيعات') || p.contains('فواتير المشتريات')) {
+      final action = await executeTool('get_invoices', {});
+      final list = action.result is List ? (action.result as List) : ((action.result is Map && action.result['data'] is List) ? action.result['data'] as List : []);
+      if (list.isEmpty) {
+        return _msg('🧾 لا توجد فواتير مسجلة في النظام حالياً.', [action]);
+      }
+      final buf = StringBuffer('🧾 قائمة الفواتير المسجلة (${list.length} فاتورة):\n\n');
+      for (int i = 0; i < list.length && i < 15; i++) {
+        final inv = list[i];
+        final num = inv['invoice_number'] ?? '#${inv['id']}';
+        final type = inv['type'] == 'sale' ? 'فاتورة بيع' : (inv['type'] == 'purchase' ? 'فاتورة شراء' : 'مرتجع');
+        final total = inv['total_amount'] ?? 0;
+        final date = inv['date'] ?? '';
+        buf.writeln('${i + 1}. **$num** ($type) — الإجمالي: $total ر.س | التاريخ: $date');
+      }
+      return _msg(buf.toString().trim(), [action]);
+    }
+
+    // C. Warehouse Items Search & Filter
     if (p.contains('أصناف') || p.contains('الاصناف') || p.contains('المستودع') || p.contains('الكميات') || p.contains('المخزون')) {
       final action = await executeTool('get_items_catalog', {'search': p.replaceAll(RegExp(r'(أصناف|الاصناف|المستودع|الكميات|المخزون|ابحث|عن|اعرض|فحص|فلتر)'), '').trim()});
       if (action.isSuccess && action.result is List) {
@@ -674,7 +726,7 @@ class AiService {
       }
     }
 
-    // B. Customers & Vendors Search & Filter
+    // D. Customers & Vendors Search & Filter
     if (p.contains('عملاء') || p.contains('موردين') || p.contains('العملاء') || p.contains('الموردين') || p.contains('ديون') || p.contains('ذمم')) {
       final action = await executeTool('get_parties_list', {'search': p.replaceAll(RegExp(r'(عملاء|موردين|العملاء|الموردين|ديون|ذمم|ابحث|عن|اعرض|فحص|فلتر)'), '').trim()});
       if (action.isSuccess && action.result is List) {
@@ -690,7 +742,7 @@ class AiService {
       }
     }
 
-    // C. Checks Portfolio Search & Filter
+    // E. Checks Portfolio Search & Filter
     if (p.contains('شيكات') || p.contains('الشيكات') || p.contains('حافظة الشيكات')) {
       final action = await executeTool('get_checks_list', {});
       if (action.isSuccess && action.result is List) {
@@ -706,7 +758,7 @@ class AiService {
       }
     }
 
-    // D. Chart of Accounts Tree (شجرة الحسابات)
+    // F. Chart of Accounts Tree (شجرة الحسابات)
     if (p.contains('شجرة الحسابات') || p.contains('الحسابات') || p.contains('دليل الحسابات')) {
       final action = await executeTool('get_accounts_list', {});
       if (action.isSuccess && action.result is List) {
@@ -720,17 +772,19 @@ class AiService {
       }
     }
 
-    // E. Financial KPIs, Profit & Loss, Balance Snapshot
+    // G. Financial KPIs, Profit & Loss, Balance Snapshot
     if (p.contains('أرباح') || p.contains('ارباح') || p.contains('مبيعات') || p.contains('مصروفات') || p.contains('مؤشرات') || p.contains('صافي')) {
       final dashAction = await executeTool('get_dashboard_stats', {});
       if (dashAction.isSuccess && dashAction.result is Map) {
         final d = dashAction.result as Map<String, dynamic>;
-        final sales = d['total_sales'] ?? d['sales'] ?? 0;
-        final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
-        final profit = d['net_profit'] ?? d['profit'] ?? 0;
-        final expenses = d['total_expenses'] ?? d['expenses'] ?? 0;
-        final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
-        final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
+        final stats = (d['stats'] as Map<String, dynamic>?) ?? d;
+        final sales = stats['total_sales'] ?? 0;
+        final purchases = stats['total_purchases'] ?? 0;
+        final profit = stats['net_profit'] ?? 0;
+        final expenses = stats['total_expenses'] ?? stats['total_expense'] ?? 0;
+        final cash = stats['cash_balance'] ?? 0;
+        final receivables = stats['customer_receivables'] ?? 0;
+        final vouchCount = stats['total_vouchers_count'] ?? 0;
 
         return _msg('''
 📊 ملخص المؤشرات المالية والأرباح:
@@ -740,6 +794,7 @@ class AiService {
 • إجمالي المصروفات: $expenses ر.س
 • رصيد الصندوق والبنوك: $cash ر.س
 • ذمم وديون العملاء: $receivables ر.س
+• إجمالي السندات المسجلة: $vouchCount سند
 ''', [dashAction]);
       }
     }
@@ -794,7 +849,7 @@ class AiService {
         // --- 2. Accounts (شجرة الحسابات) ---
         case 'get_accounts_list':
           final res = await ApiService.get(ApiEndpoints.accounts, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_account':
           final res = await ApiService.post(ApiEndpoints.accounts, body: args);
@@ -811,7 +866,7 @@ class AiService {
         // --- 3. Journal Entries (قيود اليومية) ---
         case 'get_journal_entries':
           final res = await ApiService.get(ApiEndpoints.journalEntries, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_journal_entry':
           final res = await ApiService.post(ApiEndpoints.journalEntries, body: args);
@@ -824,7 +879,7 @@ class AiService {
         // --- 4. Vouchers (سندات القبض والصرف) ---
         case 'get_vouchers':
           final res = await ApiService.get(ApiEndpoints.vouchers, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_voucher':
           final rawType = (args['type']?.toString().toLowerCase() ?? 'receipt');
@@ -850,7 +905,7 @@ class AiService {
         // --- 5. Checks (حافظة الشيكات) ---
         case 'get_checks_list':
           final res = await ApiService.get(ApiEndpoints.checks, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_check':
           final res = await ApiService.post(ApiEndpoints.checks, body: args);
@@ -867,7 +922,7 @@ class AiService {
         // --- 6. Invoices (الفواتير والمبيعات) ---
         case 'get_invoices':
           final res = await ApiService.get(ApiEndpoints.invoices, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_invoice':
           final rawType = args['type']?.toString().toLowerCase() ?? 'sale';
@@ -906,7 +961,7 @@ class AiService {
         // --- 7. Quotations (عروض الأسعار) ---
         case 'get_quotations':
           final res = await ApiService.get(ApiEndpoints.quotations, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'convert_quotation':
           final res = await ApiService.post('${ApiEndpoints.quotations}/${args['id']}/convert');
@@ -919,7 +974,7 @@ class AiService {
         // --- 8. Items & Catalog (الأصناف والمستودع) ---
         case 'get_items_catalog':
           final res = await ApiService.get(ApiEndpoints.items, queryParams: args.containsKey('search') ? {'search': args['search']} : null);
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_item':
           final res = await ApiService.post(ApiEndpoints.items, body: {
@@ -943,7 +998,7 @@ class AiService {
         // --- 9. Stock Transfers (مناقلات المخزون) ---
         case 'get_stock_transfers':
           final res = await ApiService.get(ApiEndpoints.stockTransfers, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_stock_transfer':
           final res = await ApiService.post(ApiEndpoints.stockTransfers, body: args);
@@ -956,7 +1011,7 @@ class AiService {
         // --- 10. Parties (العملاء والموردين) ---
         case 'get_parties_list':
           final res = await ApiService.get(ApiEndpoints.parties, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_party':
           final partyType = (args['type']?.toString().contains('مورد') ?? false) ? 'vendor' : 'customer';
@@ -979,7 +1034,7 @@ class AiService {
         // --- 11. Fixed Assets (الأصول الثابتة والإهلاك) ---
         case 'get_fixed_assets':
           final res = await ApiService.get(ApiEndpoints.fixedAssets, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_fixed_asset':
           final res = await ApiService.post(ApiEndpoints.fixedAssets, body: args);
@@ -996,7 +1051,7 @@ class AiService {
         // --- 12. Cost Centers (مراكز التكلفة) ---
         case 'get_cost_centers':
           final res = await ApiService.get(ApiEndpoints.costCenters, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? (res.rawJson is Map ? res.rawJson['data'] : res.rawJson), isSuccess: res.success);
 
         case 'create_cost_center':
           final res = await ApiService.post(ApiEndpoints.costCenters, body: args);

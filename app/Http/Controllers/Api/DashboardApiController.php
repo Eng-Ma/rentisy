@@ -62,29 +62,50 @@ class DashboardApiController extends Controller
             ->limit(5)
             ->get();
 
+        // Cash and Bank balance
+        $cashAccounts = Account::whereIn('code', ['1101', '1102'])
+            ->withSum('journalEntryLines as total_debit', 'debit')
+            ->withSum('journalEntryLines as total_credit', 'credit')
+            ->get();
+        $cashBalance = 0;
+        foreach ($cashAccounts as $acc) {
+            $cashBalance += ($acc->total_debit ?? 0) - ($acc->total_credit ?? 0);
+        }
+
+        // Customer Receivables (1103)
+        $receivableAcc = Account::where('code', '1103')
+            ->withSum('journalEntryLines as total_debit', 'debit')
+            ->withSum('journalEntryLines as total_credit', 'credit')
+            ->first();
+        $customerReceivables = $receivableAcc ? (($receivableAcc->total_debit ?? 0) - ($receivableAcc->total_credit ?? 0)) : 0;
+
         // Checks summary
         $underCollectionChecks = Check::where('status', 'under_collection')->sum('amount');
         $collectedChecks = Check::where('status', 'collected')->sum('amount');
 
-        return response()->json([
+        $stats = [
+            'total_sales' => (float)$totalSales,
+            'total_purchases' => (float)$totalPurchases,
+            'net_profit' => (float)$netProfit,
+            'total_revenue' => (float)$totalRevenue,
+            'total_expense' => (float)$totalExpense,
+            'cash_balance' => (float)$cashBalance,
+            'customer_receivables' => (float)$customerReceivables,
+            'total_parties' => (int)$totalParties,
+            'total_items' => (int)$totalItems,
+            'total_invoices_count' => (int)$totalInvoicesCount,
+            'total_vouchers_count' => (int)$totalVouchersCount,
+            'total_checks_count' => (int)$totalChecksCount,
+            'total_transfers_count' => (int)$totalTransfersCount,
+            'checks_under_collection' => (float)$underCollectionChecks,
+            'checks_collected' => (float)$collectedChecks,
+        ];
+
+        return response()->json(array_merge([
             'success' => true,
-            'stats' => [
-                'total_sales' => (float)$totalSales,
-                'total_purchases' => (float)$totalPurchases,
-                'net_profit' => (float)$netProfit,
-                'total_revenue' => (float)$totalRevenue,
-                'total_expense' => (float)$totalExpense,
-                'total_parties' => (int)$totalParties,
-                'total_items' => (int)$totalItems,
-                'total_invoices_count' => (int)$totalInvoicesCount,
-                'total_vouchers_count' => (int)$totalVouchersCount,
-                'total_checks_count' => (int)$totalChecksCount,
-                'total_transfers_count' => (int)$totalTransfersCount,
-                'checks_under_collection' => (float)$underCollectionChecks,
-                'checks_collected' => (float)$collectedChecks,
-            ],
+            'stats' => $stats,
             'recent_invoices' => $recentInvoices,
             'recent_vouchers' => $recentVouchers,
-        ]);
+        ], $stats));
     }
 }

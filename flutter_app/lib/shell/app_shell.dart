@@ -165,14 +165,14 @@ class _AppShellState extends State<AppShell> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'الأصيل الذهبي',
+                                'نظام المحاسبة',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w900,
                                   fontSize: 16,
                                 ),
                               ),
                               Text(
-                                'Al-Aseel ERP',
+                                'Accounting ERP',
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: AppColors.lightTextSecondary,

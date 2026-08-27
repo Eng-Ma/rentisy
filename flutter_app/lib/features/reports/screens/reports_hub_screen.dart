@@ -100,7 +100,7 @@ class ReportsHubScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'حزمة تقارير الأصيل المتقدمة (Al-Aseel Reports Suite)',
+                          'حزمة التقارير المالية والمحاسبية المتقدمة',
                           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                         ),
                         SizedBox(height: 4),

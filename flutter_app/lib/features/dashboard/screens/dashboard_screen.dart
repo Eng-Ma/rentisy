@@ -94,7 +94,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'مرحباً بك في نظام الأصيل الذهبي ERP',
+                                      'مرحباً بك في نظام المحاسبة ERP',
                                       style: TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w900,

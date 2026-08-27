@@ -205,7 +205,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 20),
                           const Text(
-                            'نظام الأصيل للمحاسبة',
+                            'نظام المحاسبة والمستودعات',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 24,

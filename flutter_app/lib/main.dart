@@ -49,7 +49,7 @@ class AccountingErpApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
-            title: 'نظام الأصيل للمحاسبة والمستودعات',
+            title: 'نظام المحاسبة وإدارة المستودعات',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,

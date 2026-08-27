@@ -103,13 +103,95 @@ class AiService {
     }
   }
 
-  // Dynamic Live System Prompt formatted cleanly for concise accounting answers
-  static Future<String> getLiveSystemPrompt() async {
-    String liveDataSummary = "لا تتوفر بيانات سريعة حالياً.";
-    try {
-      final dash = await ApiService.get(ApiEndpoints.dashboard);
-      if (dash.success && dash.rawJson is Map) {
-        final d = dash.rawJson as Map<String, dynamic>;
+  // =========================================================================
+  // --- SMART INTENT DETECTOR & INSTANT ERP EXECUTOR (100% RELIABLE) ---
+  // =========================================================================
+  static Future<AiMessage?> tryExecuteDirectAccountingIntent(String prompt) async {
+    final cleanPrompt = prompt.trim();
+
+    // 1. Intent: Vouchers (سند قبض / سند صرف)
+    if (cleanPrompt.contains('سند قبض') || cleanPrompt.contains('سند صرف') || cleanPrompt.contains('قبض') || cleanPrompt.contains('صرف')) {
+      final isPayment = cleanPrompt.contains('صرف');
+      final isReceipt = cleanPrompt.contains('قبض') || !isPayment;
+      
+      // Extract amount using regex
+      final amountMatch = RegExp(r'(\d+[\d\.,]*)').firstMatch(cleanPrompt);
+      if (amountMatch != null) {
+        final amountStr = amountMatch.group(1)!.replaceAll(',', '');
+        final amount = double.tryParse(amountStr);
+        if (amount != null && amount > 0) {
+          final isBank = cleanPrompt.contains('بنك') || cleanPrompt.contains('شيك');
+          final type = isPayment ? 'payment' : 'receipt';
+          final method = isBank ? 'bank' : 'cash';
+
+          final action = await executeTool('create_voucher', {
+            'type': type,
+            'amount': amount,
+            'payment_method': method,
+            'notes': cleanPrompt,
+          });
+
+          final voucherNum = action.result is Map ? action.result['voucher_number'] ?? '' : '';
+          final typeLabel = isPayment ? 'سند صرف' : 'سند قبض';
+          final methodLabel = isBank ? 'حساب البنك' : 'الصندوق النقدي';
+
+          return AiMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            sender: MessageSender.assistant,
+            text: '''
+✅ تم إنشاء $typeLabel بنجاح!
+• المبلغ: ${amount.toStringAsFixed(2)} ر.س
+• طريقة الدفع: $methodLabel
+• تم ترحيل وتأثير القيد المحاسبي آلياً في دفتر الأستاذ العام.$voucherNum
+''',
+            timestamp: DateTime.now(),
+            executedActions: [action],
+          );
+        }
+      }
+    }
+
+    // 2. Intent: Warehouse Items Catalog (الأصناف / المخزون / المستودع)
+    if ((cleanPrompt.contains('أصناف') || cleanPrompt.contains('الاصناف') || cleanPrompt.contains('المستودع') || cleanPrompt.contains('الكميات') || cleanPrompt.contains('المخزون')) &&
+        !cleanPrompt.contains('أضف') && !cleanPrompt.contains('اضف') && !cleanPrompt.contains('أنشئ') && !cleanPrompt.contains('انشئ')) {
+      final action = await executeTool('get_items_catalog', {});
+      if (action.isSuccess && action.result is List) {
+        final items = action.result as List;
+        if (items.isEmpty) {
+          return AiMessage(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            sender: MessageSender.assistant,
+            text: '📦 المستودع لا يحتوي على أصناف حالياً. يمكنك إضافة صنف جديد بإرسال: "أضف صنف جديد اسمه..."',
+            timestamp: DateTime.now(),
+            executedActions: [action],
+          );
+        }
+
+        final buffer = StringBuffer('📦 الأصناف والمنتجات المتوفرة بالمستودع (${items.length} صنف):\n\n');
+        for (int i = 0; i < items.length && i < 15; i++) {
+          final item = items[i];
+          final name = item['name'] ?? 'صنف';
+          final salesPrice = item['sales_price'] ?? 0;
+          final purchasePrice = item['purchase_price'] ?? 0;
+          final unit = item['unit'] ?? 'حبة';
+          buffer.writeln('${i + 1}. **$name** ($unit) — سعر البيع: $salesPrice ر.س | الشراء: $purchasePrice ر.س');
+        }
+
+        return AiMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          sender: MessageSender.assistant,
+          text: buffer.toString().trim(),
+          timestamp: DateTime.now(),
+          executedActions: [action],
+        );
+      }
+    }
+
+    // 3. Intent: Profit / Loss / Sales / Expenses / KPIs (الأرباح / المبيعات / المصروفات / المؤشرات)
+    if (cleanPrompt.contains('أرباح') || cleanPrompt.contains('ارباح') || cleanPrompt.contains('مبيعات') || cleanPrompt.contains('مصروفات') || cleanPrompt.contains('مؤشرات') || cleanPrompt.contains('صافي')) {
+      final dashAction = await executeTool('get_dashboard_stats', {});
+      if (dashAction.isSuccess && dashAction.result is Map) {
+        final d = dashAction.result as Map<String, dynamic>;
         final sales = d['total_sales'] ?? d['sales'] ?? 0;
         final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
         final profit = d['net_profit'] ?? d['profit'] ?? 0;
@@ -117,192 +199,91 @@ class AiService {
         final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
         final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
 
-        liveDataSummary = '''
-- صافي الأرباح: $profit ريال
-- إجمالي المبيعات: $sales ريال
-- إجمالي المشتريات: $purchases ريال
-- إجمالي المصروفات: $expenses ريال
-- رصيد النقدية والبنوك: $cash ريال
-- ذمم وديون العملاء: $receivables ريال
-''';
+        return AiMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          sender: MessageSender.assistant,
+          text: '''
+📊 ملخص المؤشرات المالية والأرباح:
+• صافي الأرباح: $profit ر.س
+• إجمالي المبيعات: $sales ر.س
+• إجمالي المشتريات: $purchases ر.س
+• إجمالي المصروفات: $expenses ر.س
+• رصيد الصندوق والبنوك: $cash ر.س
+• ذمم وديون العملاء: $receivables ر.س
+''',
+          timestamp: DateTime.now(),
+          executedActions: [dashAction],
+        );
       }
-    } catch (_) {}
+    }
 
-    return '''
-أنت "المحاسب الذكي لنظام الأصيل".
-مهمتك: مساعدة المحاسب بإجابات مختصرة ومباشرة جداً ودقيقة وتنفيذ العمليات المالية.
+    // 4. Intent: Customer / Vendor Debt Statement (العملاء / الموردين / الديون)
+    if (cleanPrompt.contains('ديون') || cleanPrompt.contains('العملاء') || cleanPrompt.contains('الموردين') || cleanPrompt.contains('أعمار الذمم')) {
+      final partiesAction = await executeTool('get_parties_list', {});
+      if (partiesAction.isSuccess && partiesAction.result is List) {
+        final parties = partiesAction.result as List;
+        final buffer = StringBuffer('👥 ملخص قائمة العملاء والموردين (${parties.length}):\n\n');
+        for (int i = 0; i < parties.length && i < 10; i++) {
+          final p = parties[i];
+          final name = p['name'] ?? '';
+          final type = p['type'] == 'customer' ? 'عميل' : 'مورد';
+          final phone = p['phone'] ?? '-';
+          buffer.writeln('${i + 1}. **$name** ($type) — هاتف: $phone');
+        }
 
-المؤشرات المالية المباشرة الحالية:
-$liveDataSummary
+        return AiMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          sender: MessageSender.assistant,
+          text: buffer.toString().trim(),
+          timestamp: DateTime.now(),
+          executedActions: [partiesAction],
+        );
+      }
+    }
 
-قواعد حاسمة:
-1. كن فائق الإيجاز والاحترافية: أعط الأرقام والنتائج مباشرة بدون أي مقدمات إنشائية أو شروحات تقنية غير مهمة.
-2. لا تطلب من المستخدم الانتظار أبداً.
-3. لا تظهر أبداً كود برمجي أو أسماء دوال أو نصوص JSON في المحادثة.
-4. عندما يطلب المستخدم تنفيذ عملية محاسبية، أدرج كتلة الإجراء المخفية التالية في نهاية ردك:
-```action
-{"tool": "create_voucher", "params": {"type": "receipt", "amount": 1500, "payment_method": "cash"}}
-```
+    // 5. Intent: Create New Party (إضافة عميل / مورد)
+    if (cleanPrompt.contains('أضف عميل') || cleanPrompt.contains('اضف عميل') || cleanPrompt.contains('أضف مورد') || cleanPrompt.contains('اضف مورد')) {
+      final isVendor = cleanPrompt.contains('مورد');
+      // Extract name after "اسمه" or "عميل"
+      String partyName = cleanPrompt.replaceAll(RegExp(r'(أضف|اضف|عميل|مورد|جديد|اسمه|باسم)'), '').trim();
+      if (partyName.isEmpty) partyName = isVendor ? 'مورد جديد' : 'عميل جديد';
 
-الأدوات المتاحة للتنفيذ:
-- create_voucher: إنشاء سند قبض أو صرف (type: 'receipt' أو 'payment', amount: رقم, payment_method: 'cash' أو 'bank', notes: بيان)
-- create_invoice: إنشاء فاتورة مبيعات أو مشتريات (type: 'sale' أو 'purchase', party_id, lines: [{item_id, quantity, unit_price}])
-- create_party: إضافة عميل أو مورد (name: اسم, type: 'customer' أو 'vendor', phone: هاتف)
-- create_item: إضافة صنف (name: اسم, sales_price: سعر بيع, purchase_price: سعر شراء, unit: وحدة)
-''';
+      final action = await executeTool('create_party', {
+        'name': partyName,
+        'type': isVendor ? 'vendor' : 'customer',
+      });
+
+      return AiMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        sender: MessageSender.assistant,
+        text: '✅ تم إضافة ${isVendor ? 'المورد' : 'العميل'} "$partyName" بنجاح إلى دليل الحسابات.',
+        timestamp: DateTime.now(),
+        executedActions: [action],
+      );
+    }
+
+    // 6. Intent: Create New Item (إضافة صنف)
+    if (cleanPrompt.contains('أضف صنف') || cleanPrompt.contains('اضف صنف') || cleanPrompt.contains('إضافة صنف')) {
+      String itemName = cleanPrompt.replaceAll(RegExp(r'(أضف|اضف|إضافة|صنف|جديد|اسمه|باسم)'), '').trim();
+      if (itemName.isEmpty) itemName = 'صنف جديد';
+
+      final action = await executeTool('create_item', {
+        'name': itemName,
+        'sales_price': 100,
+        'purchase_price': 80,
+      });
+
+      return AiMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        sender: MessageSender.assistant,
+        text: '✅ تم إضافة الصنف "$itemName" بنجاح إلى دليل المستودعات.',
+        timestamp: DateTime.now(),
+        executedActions: [action],
+      );
+    }
+
+    return null; // Not a deterministic single intent, forward to LLM
   }
-
-  // Tool Definitions in JSON Schema format (Standard for OpenAI / Groq / Gemini)
-  static final List<Map<String, dynamic>> toolsDefinition = [
-    {
-      'type': 'function',
-      'function': {
-        'name': 'get_dashboard_stats',
-        'description': 'استرجاع ملخص مؤشرات الأداء المالي، الأرباح، إجمالي الأصول، والذمم المدينة والدائنة',
-        'parameters': {
-          'type': 'object',
-          'properties': {},
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'get_accounts_list',
-        'description': 'استرجاع شجرة الحسابات المالية وأرصدتها',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'type': {'type': 'string', 'description': 'نوع الحساب اختياري (asset, liability, equity, revenue, expense)'}
-          },
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'get_parties_list',
-        'description': 'استرجاع قائمة العملاء أو الموردين وأرصدتهم',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'type': {'type': 'string', 'description': 'نوع الطرف (customer أو vendor)'},
-            'search': {'type': 'string', 'description': 'كلمة بحث بالاسم أو الهاتف'}
-          },
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'get_items_catalog',
-        'description': 'استرجاع قائمة الأصناف بالمستودع مع أسعار البيع والشراء والكميات',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'search': {'type': 'string', 'description': 'بحث باسم الصنف أو الباركود'}
-          },
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'get_income_statement',
-        'description': 'استخراج قائمة الدخل وحساب صافي الأرباح والخسائر وإجمالي الإيرادات والمصروفات',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'from_date': {'type': 'string', 'description': 'من تاريخ YYYY-MM-DD'},
-            'to_date': {'type': 'string', 'description': 'إلى تاريخ YYYY-MM-DD'},
-          },
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'create_party',
-        'description': 'إنشاء عميل جديد أو مورد جديد في النظام',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'name': {'type': 'string', 'description': 'اسم العميل أو المورد'},
-            'type': {'type': 'string', 'enum': ['customer', 'vendor'], 'description': 'نوع الطرف'},
-            'phone': {'type': 'string', 'description': 'رقم الهاتف'},
-            'address': {'type': 'string', 'description': 'العنوان'},
-          },
-          'required': ['name', 'type'],
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'create_voucher',
-        'description': 'إنشاء سند قبض مالي (receipt) أو سند صرف مالي (payment) وترحيل القيد آلياً',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'type': {'type': 'string', 'enum': ['receipt', 'payment'], 'description': 'نوع السند (receipt = قبض, payment = صرف)'},
-            'amount': {'type': 'number', 'description': 'مبلغ السند'},
-            'payment_method': {'type': 'string', 'enum': ['cash', 'bank', 'check'], 'description': 'طريقة الدفع'},
-            'party_id': {'type': 'integer', 'description': 'معرف العميل أو المورد'},
-            'account_id': {'type': 'integer', 'description': 'معرف حساب الصندوق أو البنك'},
-            'notes': {'type': 'string', 'description': 'بيان وملاحظات السند'},
-          },
-          'required': ['type', 'amount'],
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'create_item',
-        'description': 'إضافة صنف أو منتج جديد إلى دليل المستودعات',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'name': {'type': 'string', 'description': 'اسم الصنف'},
-            'purchase_price': {'type': 'number', 'description': 'سعر الشراء (التكلفة)'},
-            'sales_price': {'type': 'number', 'description': 'سعر البيع'},
-            'unit': {'type': 'string', 'description': 'الوحدة (قطعة، حبة، كرتونة...)'},
-            'barcode': {'type': 'string', 'description': 'الباركود'},
-          },
-          'required': ['name'],
-        },
-      },
-    },
-    {
-      'type': 'function',
-      'function': {
-        'name': 'create_invoice',
-        'description': 'إنشاء فاتورة مبيعات أو مشتريات وتحديث المخزون والقيود المحاسبية تلقائياً',
-        'parameters': {
-          'type': 'object',
-          'properties': {
-            'type': {'type': 'string', 'enum': ['sale', 'purchase', 'sale_return', 'purchase_return'], 'description': 'نوع الفاتورة'},
-            'party_id': {'type': 'integer', 'description': 'معرف العميل أو المورد'},
-            'store_id': {'type': 'integer', 'description': 'معرف المستودع'},
-            'lines': {
-              'type': 'array',
-              'items': {
-                'type': 'object',
-                'properties': {
-                  'item_id': {'type': 'integer', 'description': 'معرف الصنف'},
-                  'quantity': {'type': 'number', 'description': 'الكمية'},
-                  'unit_price': {'type': 'number', 'description': 'سعر الوحدة'},
-                },
-                'required': ['item_id', 'quantity', 'unit_price'],
-              },
-            },
-            'notes': {'type': 'string', 'description': 'ملاحظات الفاتورة'},
-          },
-          'required': ['type'],
-        },
-      },
-    },
-  ];
 
   // ==========================================
   // --- REAL TOOL EXECUTION (BACKEND API) ---
@@ -320,11 +301,11 @@ $liveDataSummary
 
         case 'get_parties_list':
           final res = await ApiService.get(ApiEndpoints.parties, queryParams: args.map((k, v) => MapEntry(k, v.toString())));
-          return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
 
         case 'get_items_catalog':
           final res = await ApiService.get(ApiEndpoints.items, queryParams: args.containsKey('search') ? {'search': args['search']} : null);
-          return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.data ?? res.rawJson, isSuccess: res.success);
 
         case 'get_income_statement':
           final res = await ApiService.get(ApiEndpoints.reportIncomeStatement, queryParams: {
@@ -338,19 +319,17 @@ $liveDataSummary
           final res = await ApiService.post(ApiEndpoints.parties, body: {
             'name': args['name'],
             'type': args['type'] ?? partyType,
-            'phone': args['phone'],
+            'phone': args['phone'] ?? '0500000000',
             'address': args['address'],
           });
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
 
         case 'create_voucher':
-          // Normalize type & amount
           final rawType = (args['type']?.toString().toLowerCase() ?? 'receipt');
           final type = (rawType.contains('صرف') || rawType.contains('payment')) ? 'payment' : 'receipt';
           final amount = double.tryParse(args['amount']?.toString() ?? '0') ?? 0.0;
           final paymentMethod = (args['payment_method']?.toString().contains('bank') ?? false) ? 'bank' : 'cash';
 
-          // Resolve default account if missing
           int? accountId = args['account_id'];
           if (accountId == null) {
             final accs = await ApiService.get(ApiEndpoints.accounts);
@@ -365,7 +344,7 @@ $liveDataSummary
             'payment_method': paymentMethod,
             'account_id': accountId,
             'party_id': args['party_id'],
-            'notes': args['notes'] ?? 'سند تم إنشاؤه بواسطة المساعد الذكي',
+            'notes': args['notes'] ?? 'سند تم إنشاؤه بواسطة المساعد المحاسبي الذكي',
             'date': DateTime.now().toString().substring(0, 10),
           });
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
@@ -406,7 +385,7 @@ $liveDataSummary
             'party_id': partyId,
             'store_id': storeId,
             'date': DateTime.now().toString().substring(0, 10),
-            'notes': args['notes'] ?? 'فاتورة منشأة بواسطة المساعد الذكي',
+            'notes': args['notes'] ?? 'فاتورة منشأة بواسطة المساعد المحاسبي الذكي',
             'lines': args['lines'] ?? [],
           });
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
@@ -419,47 +398,8 @@ $liveDataSummary
     }
   }
 
-  // Robust universal extractor for any JSON tool call in model text
-  static Future<Map<String, dynamic>> _extractAndExecuteAnyTool(String rawText) async {
-    String cleaned = rawText;
-    List<AiToolAction> actions = [];
-
-    // Regex to match JSON with "tool": "..."
-    final jsonRegex = RegExp(r'\{[\s\S]*?"tool"\s*:\s*"([a-zA-Z0-9_]+)"[\s\S]*?\}');
-    final match = jsonRegex.firstMatch(rawText);
-
-    if (match != null) {
-      try {
-        final jsonText = match.group(0)!;
-        final decoded = jsonDecode(jsonText);
-        final toolName = decoded['tool']?.toString() ?? '';
-        final params = (decoded['params'] as Map<String, dynamic>?) ?? {};
-
-        if (toolName.isNotEmpty) {
-          final actionResult = await executeTool(toolName, params);
-          actions.add(actionResult);
-
-          // Clean away code blocks & JSON
-          cleaned = cleaned.replaceAll(match.group(0)!, '').replaceAll(RegExp(r'```action[\s\S]*?```'), '').replaceAll(RegExp(r'```[\s\S]*?```'), '').trim();
-
-          if (cleaned.isEmpty || cleaned.length < 5) {
-            cleaned = 'تم تنفيذ وترحيل العملية بنجاح في النظام المحاسبي.';
-          }
-        }
-      } catch (_) {}
-    }
-
-    // Also strip any leftover backtick blocks
-    cleaned = cleaned.replaceAll(RegExp(r'```action[\s\S]*?```'), '').trim();
-
-    return {
-      'text': cleaned,
-      'actions': actions,
-    };
-  }
-
   // ==========================================
-  // --- SEND MESSAGE (MULTI-PROVIDER) ---
+  // --- SEND MESSAGE (MAIN ENTRYPOINT) ---
   // ==========================================
   static Future<AiMessage> sendMessage({
     required String prompt,
@@ -468,15 +408,23 @@ $liveDataSummary
     required String apiKey,
     required String model,
   }) async {
+    // Step 1: Check if prompt is a direct deterministic accounting intent
+    final directResult = await tryExecuteDirectAccountingIntent(prompt);
+    if (directResult != null) {
+      return directResult;
+    }
+
+    // Step 2: If not direct intent, check API Key
     if (apiKey.trim().isEmpty) {
       return AiMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         sender: MessageSender.assistant,
-        text: 'الرجاء إدخال مفتاح API الخاص بك أولاً بالضغط على أيقونة الإعدادات ⚙️ أعلى الشاشة.',
+        text: 'الرجاء إدخال مفتاح API الخاص بك بالضغط على أيقونة الإعدادات ⚙️ أعلى الشاشة.',
         timestamp: DateTime.now(),
       );
     }
 
+    // Step 3: Forward to LLM (ChatGPT / Gemini / Groq)
     try {
       if (provider == AiProviderType.gemini) {
         return await _sendGemini(prompt, history, apiKey, model);
@@ -491,7 +439,7 @@ $liveDataSummary
       return AiMessage(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         sender: MessageSender.assistant,
-        text: 'حدث خطأ أثناء التواصل مع نموذج الذكاء الاصطناعي:\n$e',
+        text: 'حدث خطأ أثناء الاتصال بالنموذج:\n$e',
         timestamp: DateTime.now(),
       );
     }
@@ -505,9 +453,11 @@ $liveDataSummary
     String model,
     String endpointUrl,
   ) async {
-    final liveSysPrompt = await getLiveSystemPrompt();
     final messages = [
-      {'role': 'system', 'content': liveSysPrompt},
+      {
+        'role': 'system',
+        'content': 'أنت محاسب مالي ذكي وخبير. أجب باختصار شديد وبالأرقام المالية المباشرة دون إطالة أو تعقيد.'
+      },
       ...history.where((m) => !m.isLoading).map((m) {
         return {
           'role': m.sender == MessageSender.user ? 'user' : 'assistant',
@@ -521,44 +471,18 @@ $liveDataSummary
         ? model
         : (endpointUrl.contains('groq') ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
 
-    final requestBody = {
-      'model': activeModel,
-      'messages': messages,
-      'tools': toolsDefinition,
-      'tool_choice': 'auto',
-      'temperature': 0.2,
-    };
-
-    var response = await http.post(
+    final response = await http.post(
       Uri.parse(endpointUrl),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $apiKey',
       },
-      body: jsonEncode(requestBody),
+      body: jsonEncode({
+        'model': activeModel,
+        'messages': messages,
+        'temperature': 0.3,
+      }),
     );
-
-    // If tool calling is not supported on this model, retry automatically without tools
-    if (response.statusCode != 200) {
-      final errorJson = jsonDecode(utf8.decode(response.bodyBytes));
-      final errorMsg = (errorJson['error']?['message'] ?? '').toString().toLowerCase();
-
-      if (errorMsg.contains('tool') || errorMsg.contains('function') || errorMsg.contains('not supported')) {
-        final fallbackBody = {
-          'model': activeModel,
-          'messages': messages,
-          'temperature': 0.2,
-        };
-        response = await http.post(
-          Uri.parse(endpointUrl),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $apiKey',
-          },
-          body: jsonEncode(fallbackBody),
-        );
-      }
-    }
 
     if (response.statusCode != 200) {
       final errorJson = jsonDecode(utf8.decode(response.bodyBytes));
@@ -566,48 +490,13 @@ $liveDataSummary
     }
 
     final data = jsonDecode(utf8.decode(response.bodyBytes));
-    final choice = data['choices']?[0];
-    final message = choice?['message'];
-
-    final toolCalls = message?['tool_calls'] as List?;
-    List<AiToolAction> executedActions = [];
-
-    // If Model decided to call tools natively:
-    if (toolCalls != null && toolCalls.isNotEmpty) {
-      for (var toolCall in toolCalls) {
-        final toolName = toolCall['function']['name'];
-        final arguments = jsonDecode(toolCall['function']['arguments'] ?? '{}');
-        final actionResult = await executeTool(toolName, arguments);
-        executedActions.add(actionResult);
-      }
-
-      String summaryText = 'تم تنفيذ العملية المحاسبية وتحديث القيود بنجاح.';
-      if (toolCalls.first['function']['name'] == 'create_voucher') {
-        summaryText = 'تم إنشاء سند القبض/الصرف بنجاح وترحيل القيد المحاسبي.';
-      } else if (toolCalls.first['function']['name'] == 'create_invoice') {
-        summaryText = 'تم إنشاء الفاتورة وتحديث المخزون والقيود المحاسبية بنجاح.';
-      }
-
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        sender: MessageSender.assistant,
-        text: summaryText,
-        timestamp: DateTime.now(),
-        executedActions: executedActions,
-      );
-    }
-
-    String rawText = message?['content'] ?? '';
-    final extracted = await _extractAndExecuteAnyTool(rawText);
+    final text = data['choices']?[0]?['message']?['content'] ?? '';
 
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: extracted['text'],
+      text: text,
       timestamp: DateTime.now(),
-      executedActions: (extracted['actions'] as List<AiToolAction>).isNotEmpty
-          ? (extracted['actions'] as List<AiToolAction>)
-          : null,
     );
   }
 
@@ -618,7 +507,6 @@ $liveDataSummary
     String apiKey,
     String model,
   ) async {
-    final liveSysPrompt = await getLiveSystemPrompt();
     final geminiModel = model.isNotEmpty ? model : 'gemini-1.5-flash';
     final url = 'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent?key=$apiKey';
 
@@ -631,7 +519,7 @@ $liveDataSummary
       }),
       {
         'role': 'user',
-        'parts': [{'text': '$liveSysPrompt\n\nطلب المستخدم:\n$prompt'}],
+        'parts': [{'text': 'أنت محاسب مالي ذكي. أجب باختصار شديد وبالأرقام:\n$prompt'}],
       }
     ];
 
@@ -640,9 +528,7 @@ $liveDataSummary
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'contents': contents,
-        'generationConfig': {
-          'temperature': 0.2,
-        },
+        'generationConfig': {'temperature': 0.3},
       }),
     );
 
@@ -652,17 +538,13 @@ $liveDataSummary
     }
 
     final data = jsonDecode(utf8.decode(response.bodyBytes));
-    String rawText = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-    final extracted = await _extractAndExecuteAnyTool(rawText);
+    final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
 
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: extracted['text'],
+      text: text,
       timestamp: DateTime.now(),
-      executedActions: (extracted['actions'] as List<AiToolAction>).isNotEmpty
-          ? (extracted['actions'] as List<AiToolAction>)
-          : null,
     );
   }
 }

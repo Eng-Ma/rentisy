@@ -218,14 +218,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Icon(Icons.verified_rounded, color: AppColors.primary, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'نظام الأصيل الذهبي للمحاسبة والمستودعات',
+                        'نظام المحاسبة وإدارة المستودعات ERP',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'الإصدار: 1.0.0 Golden Edition\nنظام ERP محاسبي متكامل يدعم المحاسبة العامة، سندات القبض والصرف، الشيكات، المستودعات، والمبيعات والمشتريات.',
+                    'الإصدار: 1.0.0 Enterprise\nنظام ERP محاسبي متكامل يدعم المحاسبة العامة، سندات القبض والصرف، الشيكات، المستودعات، والمبيعات والمشتريات.',
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.5,

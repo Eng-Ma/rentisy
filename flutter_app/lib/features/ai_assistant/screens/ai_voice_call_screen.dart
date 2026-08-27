@@ -27,6 +27,7 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
   List<AiToolAction> _lastActions = [];
 
   Timer? _speechSilenceTimer;
+  Timer? _watchdogTimer;
 
   @override
   void initState() {
@@ -43,13 +44,23 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
     )..repeat(reverse: true);
 
     _startCall();
+    _startWatchdog();
+  }
+
+  void _startWatchdog() {
+    _watchdogTimer = Timer.periodic(const Duration(milliseconds: 1800), (t) {
+      if (mounted && !_isMuted && _callStatus == 'listening' && !AiVoiceService.isListening) {
+        debugPrint('Voice Call Watchdog: Restarting STT listening loop');
+        _listenToUser();
+      }
+    });
   }
 
   void _startCall() async {
     _startTimer();
     setState(() {
       _callStatus = 'listening';
-      _assistantSpeechText = 'مرحباً بك! أنا مساعدك المحاسبي الذكي. تحدث وسأنفذ عملياتك واستعلاماتك في قاعدة البيانات فوراً.';
+      _assistantSpeechText = 'مرحباً بك يا باشمهندس محمود! أنا «غباء» مستمع لك الآن، تحدث وسأنفذ أوامرك فوراً.';
     });
 
     await AiVoiceService.initialize();
@@ -75,7 +86,7 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
   }
 
   void _listenToUser() async {
-    if (_isMuted || !mounted) return;
+    if (_isMuted || !mounted || _callStatus == 'processing') return;
 
     setState(() {
       _callStatus = 'listening';
@@ -83,23 +94,29 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
     });
 
     await AiVoiceService.startListening(
-      onResult: (words) {
-        if (!mounted) return;
+      onResult: (words, isFinal) {
+        if (!mounted || _callStatus == 'processing') return;
         setState(() {
           _liveSpeechText = words;
         });
 
+        if (isFinal && words.trim().isNotEmpty) {
+          _speechSilenceTimer?.cancel();
+          _processUserVoiceCommand(words.trim());
+          return;
+        }
+
         // Reset silence timer whenever new words arrive
         _speechSilenceTimer?.cancel();
-        _speechSilenceTimer = Timer(const Duration(milliseconds: 1400), () {
-          // If user stopped speaking for 1.4 seconds, process the command!
-          if (_liveSpeechText.trim().isNotEmpty) {
+        _speechSilenceTimer = Timer(const Duration(milliseconds: 1200), () {
+          // If user stopped speaking for 1.2 seconds, process the command!
+          if (_liveSpeechText.trim().isNotEmpty && _callStatus == 'listening') {
             _processUserVoiceCommand(_liveSpeechText.trim());
           }
         });
       },
       onStatus: (status) {
-        if (!mounted || _isMuted) return;
+        if (!mounted || _isMuted || _callStatus == 'processing') return;
         if (status == 'done' || status == 'notListening') {
           if (_callStatus == 'listening') {
             if (_liveSpeechText.trim().isNotEmpty) {
@@ -184,6 +201,7 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
   void _endCall() async {
     _callDurationTimer?.cancel();
     _speechSilenceTimer?.cancel();
+    _watchdogTimer?.cancel();
     await AiVoiceService.dispose();
     if (mounted) {
       Navigator.of(context).pop();
@@ -194,6 +212,7 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
   void dispose() {
     _callDurationTimer?.cancel();
     _speechSilenceTimer?.cancel();
+    _watchdogTimer?.cancel();
     _pulseController.dispose();
     _waveController.dispose();
     AiVoiceService.dispose();

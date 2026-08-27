@@ -54,9 +54,31 @@ class AiVoiceService {
     }
   }
 
+  static String? _cachedLocaleId;
+
+  // Resolve best Arabic locale available on this device
+  static Future<String?> getArabicLocale() async {
+    if (_cachedLocaleId != null) return _cachedLocaleId;
+    try {
+      final locales = await _speech.locales();
+      for (final loc in locales) {
+        if (loc.localeId.toLowerCase().startsWith('ar')) {
+          _cachedLocaleId = loc.localeId;
+          debugPrint('Found STT Arabic Locale: $_cachedLocaleId (${loc.name})');
+          return _cachedLocaleId;
+        }
+      }
+      _cachedLocaleId = 'ar_SA';
+      return _cachedLocaleId;
+    } catch (e) {
+      _cachedLocaleId = 'ar_SA';
+      return _cachedLocaleId;
+    }
+  }
+
   // Start listening to user voice
   static Future<void> startListening({
-    required Function(String recognizedWords) onResult,
+    required Function(String recognizedWords, bool isFinal) onResult,
     Function(double soundLevel)? onSoundLevelChange,
     Function(String status)? onStatus,
   }) async {
@@ -73,18 +95,19 @@ class AiVoiceService {
     }
 
     try {
+      final locale = await getArabicLocale();
       isListening = true;
       onStatus?.call('listening');
 
       await _speech.listen(
-        localeId: 'ar',
+        localeId: locale,
         listenMode: ListenMode.dictation,
         listenFor: const Duration(hours: 1),
         pauseFor: const Duration(seconds: 4),
         onResult: (result) {
           final words = result.recognizedWords;
           if (words.isNotEmpty) {
-            onResult(words);
+            onResult(words, result.finalResult);
           }
         },
         onSoundLevelChange: onSoundLevelChange,

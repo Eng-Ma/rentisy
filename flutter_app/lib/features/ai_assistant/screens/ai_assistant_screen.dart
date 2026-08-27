@@ -93,7 +93,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       });
 
       await AiVoiceService.startListening(
-        onResult: (words) {
+        onResult: (words, isFinal) {
           if (mounted) {
             setState(() {
               _inputController.text = words;

@@ -5,6 +5,7 @@ class Formatters {
   static final NumberFormat _numberFormat = NumberFormat('#,##0', 'en_US');
   static final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   static final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
+  static final DateFormat _timeFormat = DateFormat('HH:mm');
 
   static String formatCurrency(dynamic amount, {String symbol = 'ر.س'}) {
     if (amount == null) return '0.00 $symbol';
@@ -35,6 +36,17 @@ class Formatters {
     try {
       final parsed = DateTime.parse(dateTime.toString());
       return _dateTimeFormat.format(parsed);
+    } catch (_) {
+      return dateTime.toString();
+    }
+  }
+
+  static String formatTime(dynamic dateTime) {
+    if (dateTime == null) return '-';
+    if (dateTime is DateTime) return _timeFormat.format(dateTime);
+    try {
+      final parsed = DateTime.parse(dateTime.toString());
+      return _timeFormat.format(parsed);
     } catch (_) {
       return dateTime.toString();
     }

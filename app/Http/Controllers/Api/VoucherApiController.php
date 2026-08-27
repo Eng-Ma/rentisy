@@ -49,19 +49,19 @@ class VoucherApiController extends Controller
     public function store(Request $request)
     {
         // Auto fill smart defaults for API integrations
-        if (!$request->has('currency_id')) {
+        if (!$request->filled('currency_id')) {
             $defaultCurrency = Currency::where('is_default', true)->first() ?? Currency::first();
             $request->merge(['currency_id' => $defaultCurrency?->id]);
         }
-        if (!$request->has('date')) {
+        if (!$request->filled('date')) {
             $request->merge(['date' => date('Y-m-d')]);
         }
-        if (!$request->has('account_id')) {
+        if (!$request->filled('account_id')) {
             $code = $request->input('payment_method') === 'bank' ? '1102' : '1101';
             $defaultAcc = Account::where('code', $code)->first() ?? Account::first();
             $request->merge(['account_id' => $defaultAcc?->id]);
         }
-        if (!$request->has('party_id') && !$request->has('target_account_id')) {
+        if (!$request->filled('party_id') && !$request->filled('target_account_id')) {
             $expectedType = $request->input('type') === 'receipt' ? 'customer' : 'vendor';
             $defaultParty = Party::where('type', $expectedType)->first() ?? Party::first();
             if ($defaultParty) {
@@ -193,6 +193,62 @@ class VoucherApiController extends Controller
             'message' => 'تم حفظ السند وترحيل القيد المحاسبي بنجاح',
             'data' => $voucher->load(['account', 'party', 'targetAccount', 'costCenter', 'currency', 'journalEntry']),
         ], 201);
+    }
+
+    public function update(Request $request, Voucher $voucher)
+    {
+        $validated = $request->validate([
+            'amount' => 'nullable|numeric|min:0.01',
+            'payment_method' => 'nullable|in:cash,bank,check',
+            'date' => 'nullable|date',
+            'account_id' => 'nullable|exists:accounts,id',
+            'party_id' => 'nullable|exists:parties,id',
+            'target_account_id' => 'nullable|exists:accounts,id',
+            'cost_center_id' => 'nullable|exists:cost_centers,id',
+            'notes' => 'nullable|string',
+        ]);
+
+        $voucher = DB::transaction(function () use ($voucher, $validated) {
+            $voucher->update($validated);
+
+            // Update associated journal entry & lines if amount or date changed
+            if ($voucher->journal_entry_id) {
+                $journalEntry = JournalEntry::find($voucher->journal_entry_id);
+                if ($journalEntry) {
+                    if (isset($validated['date'])) {
+                        $journalEntry->update(['date' => $validated['date']]);
+                    }
+                    if (isset($validated['notes'])) {
+                        $typeLabel = $voucher->type === 'receipt' ? 'سند قبض' : 'سند صرف';
+                        $journalEntry->update(['description' => "{$typeLabel} رقم {$voucher->voucher_number} - " . $validated['notes']]);
+                    }
+                    if (isset($validated['amount'])) {
+                        $baseAmount = (float)$validated['amount'] * (float)$journalEntry->exchange_rate;
+                        foreach ($journalEntry->lines as $line) {
+                            if ($line->debit > 0) {
+                                $line->update(['debit' => $baseAmount]);
+                            }
+                            if ($line->credit > 0) {
+                                $line->update(['credit' => $baseAmount]);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Update associated check if any
+            if (isset($validated['amount'])) {
+                Check::where('voucher_id', $voucher->id)->update(['amount' => (float)$validated['amount']]);
+            }
+
+            return $voucher;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تعديل السند والقيد المحاسبي بنجاح',
+            'data' => $voucher->load(['account', 'party', 'targetAccount', 'costCenter', 'currency', 'journalEntry']),
+        ]);
     }
 
     public function destroy(Voucher $voucher)

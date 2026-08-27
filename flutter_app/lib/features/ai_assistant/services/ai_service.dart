@@ -12,6 +12,16 @@ enum AiProviderType {
 }
 
 class AiService {
+  // Normalize Eastern Arabic numerals (١٢٣٤٥٦٧٨٩٠) to Western (1234567890)
+  static String normalizeNumerals(String str) {
+    const eastern = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+    const western = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+    for (int i = 0; i < 10; i++) {
+      str = str.replaceAll(eastern[i], western[i]);
+    }
+    return str;
+  }
+
   // Fetch Live Available Models for a provider using user's API Key
   static Future<List<String>> fetchAvailableModels(AiProviderType provider, String apiKey) async {
     if (apiKey.trim().isEmpty) {
@@ -153,8 +163,10 @@ class AiService {
     required String model,
     required Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
   }) async {
+    final normalizedPrompt = normalizeNumerals(prompt);
+
     // 1. Direct Deterministic Intent & SQL Engine
-    final directResult = await tryExecuteDirectAccountingIntent(prompt);
+    final directResult = await tryExecuteDirectAccountingIntent(normalizedPrompt);
     if (directResult != null) {
       final fullText = directResult.text;
       final words = fullText.split(' ');
@@ -171,7 +183,7 @@ class AiService {
     }
 
     // 2. If prompt asks for database/data, give live DB overview even without key
-    final p = prompt.trim();
+    final p = normalizedPrompt.trim();
     if (p.contains('بيانات') || p.contains('بياناتي') || p.contains('قاعدة البيانات') || p.contains('معلومات') || p.contains('أرصدتي') || p.contains('تقرير')) {
       final dashAction = await executeTool('get_dashboard_stats', {});
       if (dashAction.isSuccess && dashAction.result is Map) {
@@ -224,12 +236,12 @@ class AiService {
     try {
       final systemPrompt = await _getLiveDatabaseContext();
       if (provider == AiProviderType.gemini) {
-        await _streamGemini(prompt, history, apiKey, model, systemPrompt, onChunk);
+        await _streamGemini(normalizedPrompt, history, apiKey, model, systemPrompt, onChunk);
       } else {
         final baseUrl = provider == AiProviderType.groq
             ? 'https://api.groq.com/openai/v1/chat/completions'
             : 'https://api.openai.com/v1/chat/completions';
-        await _streamOpenAiCompatible(prompt, history, apiKey, model, baseUrl, systemPrompt, onChunk);
+        await _streamOpenAiCompatible(normalizedPrompt, history, apiKey, model, baseUrl, systemPrompt, onChunk);
       }
     } catch (e) {
       onChunk('\n\nحدث خطأ أثناء البث المباشر:\n$e', isDone: true);
@@ -385,8 +397,24 @@ class AiService {
   // --- COMPLETE DETERMINISTIC ERP & DIRECT SQL DATABASE ENGINE ---
   // =========================================================================
   static Future<AiMessage?> tryExecuteDirectAccountingIntent(String prompt) async {
-    final p = prompt.trim();
+    final p = normalizeNumerals(prompt.trim());
     final upper = p.toUpperCase();
+
+    // Helper: Extract ID numbers (e.g. "رقم 5", "#5", "5")
+    int? extractId() {
+      final match = RegExp(r'(?:رقم|id|#)\s*(\d+)').firstMatch(p) ?? RegExp(r'(\d+)').firstMatch(p);
+      if (match != null) return int.tryParse(match.group(1)!);
+      return null;
+    }
+
+    // Helper: Extract Amount
+    double? extractAmount() {
+      final match = RegExp(r'(\d+[\d\.,]*)').firstMatch(p);
+      if (match != null) {
+        return double.tryParse(match.group(1)!.replaceAll(',', ''));
+      }
+      return null;
+    }
 
     // -------------------------------------------------------------
     // 0. DIRECT RAW SQL EXECUTION (SELECT / UPDATE / INSERT / DELETE)
@@ -415,7 +443,44 @@ class AiService {
     }
 
     // -------------------------------------------------------------
-    // 0.1 DATABASE SCHEMA INSPECTOR (فحص هيكلية قاعدة البيانات وجداولها)
+    // 0.1 CONVERSATIONAL UPDATE / MODIFICATION (خليها 1000 / عدل السند / عدل المبلغ)
+    // -------------------------------------------------------------
+    if (p.startsWith('خليها') || p.startsWith('خليه') || p.contains('عدل') || p.contains('تعديل') || p.contains('غير') || p.contains('تغيير')) {
+      final newAmount = extractAmount();
+      if (newAmount != null && newAmount > 0) {
+        // 1. Look for target voucher (either explicitly mentioned or latest voucher)
+        int? targetVoucherId = extractId();
+        String voucherNumber = '';
+
+        if (targetVoucherId == null || !p.contains('رقم')) {
+          final vouchersAction = await executeTool('get_vouchers', {});
+          final list = vouchersAction.result is List ? (vouchersAction.result as List) : ((vouchersAction.result is Map && vouchersAction.result['data'] is List) ? vouchersAction.result['data'] as List : []);
+          if (list.isNotEmpty) {
+            targetVoucherId = list.first['id'];
+            voucherNumber = list.first['voucher_number'] ?? '';
+          }
+        }
+
+        if (targetVoucherId != null) {
+          final action = await executeTool('update_voucher', {
+            'id': targetVoucherId,
+            'amount': newAmount,
+          });
+
+          if (action.isSuccess) {
+            final vLabel = voucherNumber.isNotEmpty ? ' **$voucherNumber**' : ' #$targetVoucherId';
+            return _resultMsg('''
+✅ تم تعديل مبلغ السند$vLabel في قاعدة البيانات بنجاح!
+• المبلغ الجديد: ${newAmount.toStringAsFixed(2)} ر.س
+• تم تحديث وترحيل القيد المحاسبي وأرصدة الصندوق آلياً.
+''', action);
+          }
+        }
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 0.2 DATABASE SCHEMA INSPECTOR (فحص هيكلية قاعدة البيانات وجداولها)
     // -------------------------------------------------------------
     if (p.contains('هيكلية قاعدة البيانات') || p.contains('جداول قاعدة البيانات') || p.contains('فحص قاعدة البيانات') || p.contains('database schema') || p.contains('tables')) {
       final action = await executeTool('get_database_schema', {});
@@ -433,7 +498,7 @@ class AiService {
     }
 
     // -------------------------------------------------------------
-    // 0.2 GLOBAL UNIVERSAL DATABASE SEARCH (بحث شامل في كل الجداول)
+    // 0.3 GLOBAL UNIVERSAL DATABASE SEARCH (بحث شامل في كل الجداول)
     // -------------------------------------------------------------
     if (p.startsWith('ابحث في قاعدة البيانات عن') || p.startsWith('ابحث في كل الجداول عن') || p.startsWith('بحث شامل عن')) {
       final term = p.replaceAll(RegExp(r'(ابحث في قاعدة البيانات عن|ابحث في كل الجداول عن|بحث شامل عن|ابحث عن|بحث عن)'), '').trim();
@@ -451,22 +516,6 @@ class AiService {
         });
         return _msg(buf.toString().trim(), [action]);
       }
-    }
-
-    // Helper: Extract ID numbers (e.g. "رقم 5", "#5", "5")
-    int? extractId() {
-      final match = RegExp(r'(?:رقم|id|#)\s*(\d+)').firstMatch(p) ?? RegExp(r'(\d+)').firstMatch(p);
-      if (match != null) return int.tryParse(match.group(1)!);
-      return null;
-    }
-
-    // Helper: Extract Amount
-    double? extractAmount() {
-      final match = RegExp(r'(\d+[\d\.,]*)').firstMatch(p);
-      if (match != null) {
-        return double.tryParse(match.group(1)!.replaceAll(',', ''));
-      }
-      return null;
     }
 
     // -------------------------------------------------------------
@@ -597,7 +646,7 @@ class AiService {
     // -------------------------------------------------------------
     // 6. INVOICES CREATION (إنشاء فاتورة مبيعات / مشتريات)
     // -------------------------------------------------------------
-    if ((p.contains('فاتورة') || p.contains('فاتوره')) && (p.contains('أنشئ') || p.contains('انشئ') || p.contains('أضف') || p.contains('سجل') || p.contains('جديدة'))) {
+    if ((p.contains('فاتورة') || p.contains('فاتوره')) && (p.contains('أنشئ') || p.contains('انشئ') || p.contains('أضف') || p.contains('اضف') || p.contains('سجل') || p.contains('جديدة'))) {
       final isPurchase = p.contains('شراء') || p.contains('مشتريات');
       final type = isPurchase ? 'purchase' : 'sale';
 
@@ -887,15 +936,23 @@ class AiService {
           final amount = double.tryParse(args['amount']?.toString() ?? '0') ?? 0.0;
           final paymentMethod = (args['payment_method']?.toString().contains('bank') ?? false) ? 'bank' : 'cash';
 
-          final res = await ApiService.post(ApiEndpoints.vouchers, body: {
+          final body = <String, dynamic>{
             'type': type,
             'amount': amount,
             'payment_method': paymentMethod,
-            'account_id': args['account_id'],
-            'party_id': args['party_id'],
             'notes': args['notes'] ?? 'سند منشأ بواسطة المساعد المحاسبي الذكي',
             'date': DateTime.now().toString().substring(0, 10),
-          });
+          };
+          if (args['account_id'] != null) body['account_id'] = args['account_id'];
+          if (args['party_id'] != null) body['party_id'] = args['party_id'];
+
+          final res = await ApiService.post(ApiEndpoints.vouchers, body: body);
+          return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
+
+        case 'update_voucher':
+          final updateBody = Map<String, dynamic>.from(args)..remove('id');
+          updateBody.removeWhere((k, v) => v == null);
+          final res = await ApiService.put('${ApiEndpoints.vouchers}/${args['id']}', body: updateBody);
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
 
         case 'delete_voucher':

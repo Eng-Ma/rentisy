@@ -56,6 +56,7 @@ Route::middleware([ApiTokenAuth::class])->group(function () {
     Route::get('/vouchers', [VoucherApiController::class, 'index']);
     Route::post('/vouchers', [VoucherApiController::class, 'store']);
     Route::get('/vouchers/{voucher}', [VoucherApiController::class, 'show']);
+    Route::put('/vouchers/{voucher}', [VoucherApiController::class, 'update']);
     Route::delete('/vouchers/{voucher}', [VoucherApiController::class, 'destroy']);
 
     // Checks Portfolio (حافظة الشيكات)

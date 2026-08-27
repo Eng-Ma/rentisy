@@ -103,19 +103,36 @@ class AiService {
     }
   }
 
-  // System Prompt explaining the accounting context and available ERP functions
-  static const String systemPrompt = '''
-أنت "مساعد الأصيل الذكي المحاسبي" (Al-Aseel AI Accounting Agent) - وكيل ذكاء اصطناعي خبير في إدارة نظام المحاسبة والمستودعات.
-يمكنك مساعدة المستخدم في الاستعلام عن التقارير المالية وتنفيذ المهام المحاسبية الفعلية مثل:
-1. إنشاء فواتير المبيعات والمشتريات (create_invoice)
-2. إنشاء سندات القبض والصرف (create_voucher)
-3. تسجيل قيود اليومية العامة (create_journal_entry)
-4. إضافة العملاء والموردين (create_party)
-5. إضافة أصناف جديدة للمستودع (create_item)
-6. الاستعلام عن ميزان المراجعة وقائمة الدخل والأرباح وأرصدة الحسابات ومراكز التكلفة وحافظة الشيكات (get_reports / get_dashboard / get_accounts / get_items / get_parties).
+  // Dynamic Live System Prompt with real-time financial stats from ERP
+  static Future<String> getLiveSystemPrompt() async {
+    String liveData = "";
+    try {
+      final dash = await ApiService.get(ApiEndpoints.dashboard);
+      if (dash.success && dash.rawJson is Map) {
+        liveData += "\n\n📊 بيانات ومؤشرات النظام المحاسبي المباشرة الآن:\n" + jsonEncode(dash.rawJson);
+      }
+    } catch (_) {}
 
-عندما يطلب المستخدم تنفيذ عملية أو استعلام مالي، استخدم الأدوات المتاحة (Tool Calling) لتنفيذها والرد ببيان واضح ومنسق باللغة العربية مع الأرقام والمبالغ.
+    return '''
+أنت "مساعد الأصيل الذكي المحاسبي" (Al-Aseel AI Accounting Agent) - وكيل ذكاء اصطناعي خبير ومسؤول عن إدارة نظام المحاسبة والمستودعات.
+
+$liveData
+
+قواعد وتعليمات العمل المحاسبي:
+1. عند سؤالك عن أرقام مالية، أرباح، مبيعات، مصروفات، ديون، أو أرصدة، أجب فوراً وبالأرقام والبيانات الدقيقة المستخرجة من البيانات المباشرة أعلاه بتنسيق جميل وواضح بالريال/العملة المعتمدة. لا تطلب من المستخدم الانتظار!
+2. عندما يطلب المستخدم تنفيذ عملية محاسبية (مثل إنشاء فاتورة، سند قبض، سند صرف، إضافة عميل، إضافة صنف)، استخدم استدعاء الأدوات (Tool Calling) أو قم بتضمين قالب الإجراء التالي في ردك ليقوم النظام بتنفيذه وترحيله آلياً:
+```action
+{"tool": "اسم_الأداة", "params": {"type": "...", "amount": 100, ...}}
+```
+
+قائمة الأدوات المتاحة:
+- create_invoice: إنشاء فاتورة مبيعات أو مشتريات (type, party_id, store_id, lines: [{item_id, quantity, unit_price}], notes)
+- create_voucher: إنشاء سند قبض أو صرف (type: 'receipt'/'payment', amount, payment_method: 'cash'/'bank', notes)
+- create_party: إضافة عميل أو مورد (name, type: 'customer'/'vendor', phone, address)
+- create_item: إضافة صنف بالمستودع (name, sales_price, purchase_price, unit)
+- create_journal_entry: تسجيل قيد يومية عام متزن
 ''';
+  }
 
   // Tool Definitions in JSON Schema format (Standard for OpenAI / Groq / Gemini)
   static final List<Map<String, dynamic>> toolsDefinition = [
@@ -410,10 +427,17 @@ class AiService {
     List<AiMessage> history,
     String apiKey,
     String model,
+  // --- OPENAI & GROQ IMPLEMENTATION ---
+  static Future<AiMessage> _sendOpenAiCompatible(
+    String prompt,
+    List<AiMessage> history,
+    String apiKey,
+    String model,
     String endpointUrl,
   ) async {
+    final liveSysPrompt = await getLiveSystemPrompt();
     final messages = [
-      {'role': 'system', 'content': systemPrompt},
+      {'role': 'system', 'content': liveSysPrompt},
       ...history.where((m) => !m.isLoading).map((m) {
         return {
           'role': m.sender == MessageSender.user ? 'user' : 'assistant',
@@ -478,7 +502,7 @@ class AiService {
     final toolCalls = message?['tool_calls'] as List?;
     List<AiToolAction> executedActions = [];
 
-    // If Model decided to call tools:
+    // If Model decided to call tools natively:
     if (toolCalls != null && toolCalls.isNotEmpty) {
       final List<Map<String, dynamic>> toolMessages = [
         ...messages,
@@ -529,10 +553,32 @@ class AiService {
       }
     }
 
+    String textContent = message?['content'] ?? '';
+
+    // Check if model returned an action block ```action ... ```
+    if (textContent.contains('```action')) {
+      try {
+        final startIdx = textContent.indexOf('```action') + 9;
+        final endIdx = textContent.indexOf('```', startIdx);
+        if (endIdx > startIdx) {
+          final actionJsonStr = textContent.substring(startIdx, endIdx).trim();
+          final actionMap = jsonDecode(actionJsonStr);
+          final toolName = actionMap['tool']?.toString() ?? '';
+          final params = (actionMap['params'] as Map<String, dynamic>?) ?? {};
+          if (toolName.isNotEmpty) {
+            final actionResult = await executeTool(toolName, params);
+            executedActions.add(actionResult);
+            textContent = textContent.replaceAll(RegExp(r'```action[\s\S]*?```'), '').trim() +
+                '\n\n✅ تم ترحيل وتسجيل العملية بنجاح في النظام المحاسبي.';
+          }
+        }
+      } catch (_) {}
+    }
+
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: message?['content'] ?? '',
+      text: textContent,
       timestamp: DateTime.now(),
       executedActions: executedActions.isNotEmpty ? executedActions : null,
     );
@@ -545,6 +591,7 @@ class AiService {
     String apiKey,
     String model,
   ) async {
+    final liveSysPrompt = await getLiveSystemPrompt();
     final geminiModel = model.isNotEmpty ? model : 'gemini-1.5-flash';
     final url = 'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent?key=$apiKey';
 
@@ -557,7 +604,7 @@ class AiService {
       }),
       {
         'role': 'user',
-        'parts': [{'text': '$systemPrompt\n\nطلب المستخدم:\n$prompt'}],
+        'parts': [{'text': '$liveSysPrompt\n\nطلب المستخدم:\n$prompt'}],
       }
     ];
 
@@ -578,13 +625,35 @@ class AiService {
     }
 
     final data = jsonDecode(utf8.decode(response.bodyBytes));
-    final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+    String text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+    List<AiToolAction> executedActions = [];
+
+    // Check if model returned an action block ```action ... ```
+    if (text.contains('```action')) {
+      try {
+        final startIdx = text.indexOf('```action') + 9;
+        final endIdx = text.indexOf('```', startIdx);
+        if (endIdx > startIdx) {
+          final actionJsonStr = text.substring(startIdx, endIdx).trim();
+          final actionMap = jsonDecode(actionJsonStr);
+          final toolName = actionMap['tool']?.toString() ?? '';
+          final params = (actionMap['params'] as Map<String, dynamic>?) ?? {};
+          if (toolName.isNotEmpty) {
+            final actionResult = await executeTool(toolName, params);
+            executedActions.add(actionResult);
+            text = text.replaceAll(RegExp(r'```action[\s\S]*?```'), '').trim() +
+                '\n\n✅ تم ترحيل وتسجيل العملية بنجاح في النظام المحاسبي.';
+          }
+        }
+      } catch (_) {}
+    }
 
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
       text: text,
       timestamp: DateTime.now(),
+      executedActions: executedActions.isNotEmpty ? executedActions : null,
     );
   }
 }

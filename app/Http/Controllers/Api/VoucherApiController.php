@@ -48,6 +48,31 @@ class VoucherApiController extends Controller
 
     public function store(Request $request)
     {
+        // Auto fill smart defaults for API integrations
+        if (!$request->has('currency_id')) {
+            $defaultCurrency = Currency::where('is_default', true)->first() ?? Currency::first();
+            $request->merge(['currency_id' => $defaultCurrency?->id]);
+        }
+        if (!$request->has('date')) {
+            $request->merge(['date' => date('Y-m-d')]);
+        }
+        if (!$request->has('account_id')) {
+            $code = $request->input('payment_method') === 'bank' ? '1102' : '1101';
+            $defaultAcc = Account::where('code', $code)->first() ?? Account::first();
+            $request->merge(['account_id' => $defaultAcc?->id]);
+        }
+        if (!$request->has('party_id') && !$request->has('target_account_id')) {
+            $expectedType = $request->input('type') === 'receipt' ? 'customer' : 'vendor';
+            $defaultParty = Party::where('type', $expectedType)->first() ?? Party::first();
+            if ($defaultParty) {
+                $request->merge(['party_id' => $defaultParty->id]);
+            } else {
+                $counterCode = $request->input('type') === 'receipt' ? '4101' : '5101';
+                $counterAcc = Account::where('code', $counterCode)->first() ?? Account::first();
+                $request->merge(['target_account_id' => $counterAcc?->id]);
+            }
+        }
+
         $validated = $request->validate([
             'voucher_number' => 'nullable|string|unique:vouchers,voucher_number',
             'type' => 'required|in:receipt,payment',
@@ -65,13 +90,6 @@ class VoucherApiController extends Controller
             'bank_name' => 'nullable|string',
             'notes' => 'nullable|string',
         ]);
-
-        if (empty($validated['party_id']) && empty($validated['target_account_id'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'يجب اختيار العميل/المورد أو الحساب المقابل.',
-            ], 422);
-        }
 
         // Auto-generate voucher number if omitted
         if (empty($validated['voucher_number'])) {

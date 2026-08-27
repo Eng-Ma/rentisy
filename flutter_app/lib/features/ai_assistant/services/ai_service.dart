@@ -423,15 +423,19 @@ class AiService {
       {'role': 'user', 'content': prompt},
     ];
 
+    final activeModel = model.isNotEmpty
+        ? model
+        : (endpointUrl.contains('groq') ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
+
     final requestBody = {
-      'model': model.isNotEmpty ? model : (endpointUrl.contains('groq') ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'),
+      'model': activeModel,
       'messages': messages,
       'tools': toolsDefinition,
       'tool_choice': 'auto',
       'temperature': 0.3,
     };
 
-    final response = await http.post(
+    var response = await http.post(
       Uri.parse(endpointUrl),
       headers: {
         'Content-Type': 'application/json',
@@ -439,6 +443,28 @@ class AiService {
       },
       body: jsonEncode(requestBody),
     );
+
+    // If tool calling is not supported on this model, retry automatically without tools
+    if (response.statusCode != 200) {
+      final errorJson = jsonDecode(utf8.decode(response.bodyBytes));
+      final errorMsg = (errorJson['error']?['message'] ?? '').toString().toLowerCase();
+
+      if (errorMsg.contains('tool') || errorMsg.contains('function') || errorMsg.contains('not supported')) {
+        final fallbackBody = {
+          'model': activeModel,
+          'messages': messages,
+          'temperature': 0.3,
+        };
+        response = await http.post(
+          Uri.parse(endpointUrl),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $apiKey',
+          },
+          body: jsonEncode(fallbackBody),
+        );
+      }
+    }
 
     if (response.statusCode != 200) {
       final errorJson = jsonDecode(utf8.decode(response.bodyBytes));
@@ -483,7 +509,7 @@ class AiService {
           'Authorization': 'Bearer $apiKey',
         },
         body: jsonEncode({
-          'model': model.isNotEmpty ? model : (endpointUrl.contains('groq') ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini'),
+          'model': activeModel,
           'messages': toolMessages,
           'temperature': 0.3,
         }),

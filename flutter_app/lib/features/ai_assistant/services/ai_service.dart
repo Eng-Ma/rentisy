@@ -22,6 +22,30 @@ class AiService {
     return str;
   }
 
+  // Format concise and token-efficient error message
+  static String formatCleanError(dynamic result) {
+    if (result == null) return 'حدث خطأ غير معروف في الخادم';
+    if (result is Map) {
+      if (result['message'] != null && result['message'].toString().isNotEmpty) {
+        final msg = result['message'].toString();
+        if (msg.contains('No query results for model')) {
+          return 'السجل المطلوب غير موجود في قاعدة البيانات.';
+        }
+        return msg;
+      }
+      if (result['error'] != null) return result['error'].toString();
+      if (result['errors'] is Map) {
+        final errorsMap = result['errors'] as Map;
+        final firstErr = errorsMap.values.first;
+        if (firstErr is List && firstErr.isNotEmpty) return firstErr.first.toString();
+        return firstErr.toString();
+      }
+    }
+    final str = result.toString();
+    if (str.length > 80) return '${str.substring(0, 80)}...';
+    return str;
+  }
+
   // Fetch Live Available Models for a provider using user's API Key
   static Future<List<String>> fetchAvailableModels(AiProviderType provider, String apiKey) async {
     if (apiKey.trim().isEmpty) {
@@ -423,10 +447,17 @@ class AiService {
              text.contains('كم عدد') || text.contains('هات');
     }
 
-    // Helper: Extract ID numbers (e.g. "رقم 5", "#5", "5")
-    int? extractId() {
-      final match = RegExp(r'(?:رقم|id|#)\s*(\d+)').firstMatch(p) ?? RegExp(r'(\d+)').firstMatch(p);
+    // Helper: Extract ID numbers (ONLY when explicitly prefixed by رقم / id / #)
+    int? extractExplicitId() {
+      final match = RegExp(r'(?:رقم|id|#|معرف|كود)\s*(\d+)', caseSensitive: false).firstMatch(p);
       if (match != null) return int.tryParse(match.group(1)!);
+      return null;
+    }
+
+    // Helper: Extract Voucher Code (e.g. RV-00001, PV-00002)
+    String? extractVoucherCode() {
+      final match = RegExp(r'(?:RV|PV|INV)-\d+', caseSensitive: false).firstMatch(p);
+      if (match != null) return match.group(0)!.toUpperCase();
       return null;
     }
 
@@ -468,7 +499,7 @@ class AiService {
           return _msg('✅ ${res['message'] ?? 'تم تنفيذ استعلام SQL بنجاح.'}', [action]);
         }
       } else {
-        return _msg('❌ تعذر تنفيذ الاستعلام في قاعدة البيانات: ${action.result}', [action]);
+        return _msg('❌ تعذر تنفيذ الاستعلام: ${formatCleanError(action.result)}', [action]);
       }
     }
 
@@ -478,10 +509,10 @@ class AiService {
     if (p.startsWith('خليها') || p.startsWith('خليه') || p.startsWith('غيرها') || p.startsWith('غيره') || p.contains('عدل') || p.contains('تعديل') || p.contains('غير المبلغ') || p.contains('تغيير المبلغ')) {
       final newAmount = extractAmount();
       if (newAmount != null && newAmount > 0) {
-        int? targetVoucherId = extractId();
-        String voucherNumber = '';
+        int? targetVoucherId = extractExplicitId();
+        String voucherNumber = extractVoucherCode() ?? '';
 
-        if (targetVoucherId == null || !p.contains('رقم')) {
+        if (targetVoucherId == null && voucherNumber.isEmpty) {
           final vouchersAction = await executeTool('get_vouchers', {});
           final list = vouchersAction.result is List ? (vouchersAction.result as List) : ((vouchersAction.result is Map && vouchersAction.result['data'] is List) ? vouchersAction.result['data'] as List : []);
           if (list.isNotEmpty) {
@@ -490,9 +521,9 @@ class AiService {
           }
         }
 
-        if (targetVoucherId != null) {
+        if (targetVoucherId != null || voucherNumber.isNotEmpty) {
           final action = await executeTool('update_voucher', {
-            'id': targetVoucherId,
+            'id': targetVoucherId ?? voucherNumber,
             'amount': newAmount,
           });
 
@@ -504,7 +535,7 @@ class AiService {
 • تم تحديث وترحيل القيد المحاسبي وأرصدة الصندوق آلياً.
 ''', action);
           } else {
-            return _resultMsg('❌ تعذر تعديل السند في قاعدة البيانات: ${action.result}', action);
+            return _resultMsg('❌ تعذر تعديل السند: ${formatCleanError(action.result)}', action);
           }
         }
       }
@@ -550,11 +581,12 @@ class AiService {
     }
 
     // -------------------------------------------------------------
-    // 1. DELETE ACTIONS (احذفه / احذفها / امسحه / شيله / حذف بالرقم أو السياق)
+    // 1. DELETE ACTIONS (احذفه / احذفها / امسحه / شيله / حذف بالرقم أو القيمة أو الكود)
     // -------------------------------------------------------------
     if (p.startsWith('احذف') || p.startsWith('امسح') || p.startsWith('شيل') || p.startsWith('الغ') ||
         p.contains('احذف') || p.contains('حذف') || p.contains('مسح') || p.contains('شيل')) {
-      final id = extractId();
+      final id = extractExplicitId();
+      final voucherCode = extractVoucherCode();
 
       // If ID is given explicitly (e.g. "احذف السند رقم 2")
       if (id != null) {
@@ -604,7 +636,30 @@ class AiService {
         }
       }
 
-      // If NO ID is given (e.g. "احذفه", "احذفها", "امسحه", "شيله", "احذف السند", "احذف آخر سند")
+      // If Voucher Code is given (e.g. "احذف RV-00002")
+      if (voucherCode != null) {
+        final action = await executeTool('delete_voucher', {'id': voucherCode});
+        return _resultMsg('✅ تم حذف السند **$voucherCode** وإلغاء قيوده المحاسبية بنجاح.', action);
+      }
+
+      // If Amount is given (e.g. "احذف سند الـ 100" أو "احذف سند 100 ريال")
+      final amt = extractAmount();
+      if (amt != null && amt > 0 && p.contains('سند')) {
+        final vouchersAction = await executeTool('get_vouchers', {});
+        final list = vouchersAction.result is List ? (vouchersAction.result as List) : ((vouchersAction.result is Map && vouchersAction.result['data'] is List) ? vouchersAction.result['data'] as List : []);
+        final matchVoucher = list.firstWhere(
+          (v) => (double.tryParse(v['amount']?.toString() ?? '0') ?? 0) == amt,
+          orElse: () => list.isNotEmpty ? list.first : null,
+        );
+        if (matchVoucher != null) {
+          final action = await executeTool('delete_voucher', {'id': matchVoucher['id']});
+          final num = matchVoucher['voucher_number'] ?? '#${matchVoucher['id']}';
+          final type = matchVoucher['type'] == 'receipt' ? 'سند قبض' : 'سند صرف';
+          return _resultMsg('✅ تم حذف $type **$num** بقيمة ${matchVoucher['amount']} ر.س وعكس القيد المحاسبي بنجاح.', action);
+        }
+      }
+
+      // Contextual Target Deletion:
       if (p.contains('فاتورة') || p.contains('فاتوره')) {
         final invoicesAction = await executeTool('get_invoices', {});
         final list = invoicesAction.result is List ? (invoicesAction.result as List) : ((invoicesAction.result is Map && invoicesAction.result['data'] is List) ? invoicesAction.result['data'] as List : []);
@@ -641,7 +696,7 @@ class AiService {
     // 2. CHECKS LIFECYCLE (تحصيل، إيداع، إرجاع الشيكات)
     // -------------------------------------------------------------
     if (p.contains('شيك') && (p.contains('حصل') || p.contains('تحصيل') || p.contains('اودع') || p.contains('إيداع') || p.contains('ارجع') || p.contains('ارتجاع') || p.contains('حالة'))) {
-      final id = extractId();
+      final id = extractExplicitId();
       if (id != null) {
         String status = 'collected';
         if (p.contains('اودع') || p.contains('إيداع') || p.contains('بنك')) status = 'deposited';
@@ -658,7 +713,7 @@ class AiService {
     // 3. QUOTATIONS CONVERSION (تحويل عرض سعر إلى فاتورة)
     // -------------------------------------------------------------
     if ((p.contains('عرض سعر') || p.contains('عرض السعر')) && (p.contains('حول') || p.contains('تحويل') || p.contains('فاتورة'))) {
-      final id = extractId();
+      final id = extractExplicitId();
       if (id != null) {
         final action = await executeTool('convert_quotation', {'id': id});
         return _resultMsg('✅ تم تحويل عرض السعر #$id إلى فاتورة مبيعات معتمدة وترحيل المخزون.', action);
@@ -669,7 +724,7 @@ class AiService {
     // 4. FIXED ASSETS DEPRECIATION (إهلاك الأصول الثابتة)
     // -------------------------------------------------------------
     if ((p.contains('أصل') || p.contains('اصل') || p.contains('الأصول')) && (p.contains('اهلك') || p.contains('إهلاك') || p.contains('اهلاك') || p.contains('حساب الإهلاك'))) {
-      final id = extractId();
+      final id = extractExplicitId();
       if (id != null) {
         final action = await executeTool('depreciate_fixed_asset', {'id': id});
         return _resultMsg('✅ تم احتساب إهلاك الأصل #$id وتوليد قيد الإهلاك المحاسبي بنجاح.', action);
@@ -932,7 +987,7 @@ class AiService {
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: action.isSuccess ? text : '❌ تعذر تنفيذ العملية في قاعدة البيانات: ${action.result}',
+      text: action.isSuccess ? text : '❌ تعذر تنفيذ العملية: ${formatCleanError(action.result)}',
       timestamp: DateTime.now(),
       executedActions: [action],
     );

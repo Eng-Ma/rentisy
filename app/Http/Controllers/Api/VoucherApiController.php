@@ -251,8 +251,26 @@ class VoucherApiController extends Controller
         ]);
     }
 
-    public function destroy(Voucher $voucher)
+    public function destroy($id)
     {
+        $voucher = Voucher::where('id', $id)
+            ->orWhere('voucher_number', $id)
+            ->orWhere('voucher_number', 'RV-' . str_pad((string)$id, 5, '0', STR_PAD_LEFT))
+            ->orWhere('voucher_number', 'PV-' . str_pad((string)$id, 5, '0', STR_PAD_LEFT))
+            ->first();
+
+        if (!$voucher) {
+            $voucher = Voucher::where('amount', (float)$id)->latest('id')->first();
+        }
+
+        if (!$voucher) {
+            return response()->json([
+                'success' => false,
+                'message' => "لم يتم العثور على سند بالرقم أو القيمة المطلوبة ($id)",
+            ], 404);
+        }
+
+        $num = $voucher->voucher_number;
         DB::transaction(function () use ($voucher) {
             Check::where('voucher_id', $voucher->id)->delete();
 
@@ -269,7 +287,7 @@ class VoucherApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'تم حذف السند والقيد المرتبط بنجاح',
+            'message' => "تم حذف السند $num والقيد المرتبط به بنجاح",
         ]);
     }
 }

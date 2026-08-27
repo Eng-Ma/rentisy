@@ -48,18 +48,14 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
   void _startCall() async {
     _startTimer();
     setState(() {
-      _callStatus = 'speaking';
-      _assistantSpeechText = 'مرحباً بك! أنا مساعدك المحاسبي الذكي. كيف أقدر أساعدك اليوم في حساباتك ومستودعاتك؟';
+      _callStatus = 'listening';
+      _assistantSpeechText = 'مرحباً بك! أنا مساعدك المحاسبي الذكي. تحدث وسأنفذ عملياتك واستعلاماتك في قاعدة البيانات فوراً.';
     });
 
     await AiVoiceService.initialize();
     if (!mounted) return;
 
-    await AiVoiceService.speak(_assistantSpeechText, onComplete: () {
-      if (mounted && !_isMuted) {
-        _listenToUser();
-      }
-    });
+    _listenToUser();
   }
 
   void _startTimer() {
@@ -134,20 +130,9 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
           if (!mounted) return;
 
           setState(() {
-            _callStatus = 'speaking';
+            _callStatus = 'idle';
             _assistantSpeechText = responseText;
             _lastActions = actions ?? [];
-          });
-
-          await AiVoiceService.speak(responseText, onComplete: () {
-            if (mounted && !_isMuted) {
-              // Automatically listen for the next sentence!
-              _listenToUser();
-            } else if (mounted) {
-              setState(() {
-                _callStatus = 'idle';
-              });
-            }
           });
         },
       );

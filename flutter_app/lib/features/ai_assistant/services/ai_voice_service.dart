@@ -104,14 +104,21 @@ class AiVoiceService {
     }
   }
 
-  // Speak AI Response
+  // Speak AI Response (Muted / Silent by default to avoid OS language voice mismatches)
+  static bool enableVoiceAudio = false;
+
   static Future<void> speak(String text, {Function()? onComplete}) async {
+    if (!enableVoiceAudio) {
+      // Stay silent and trigger completion immediately for instant visual flow
+      onComplete?.call();
+      return;
+    }
+
     if (!_isTtsInitialized) {
       await initialize();
     }
 
     try {
-      // Clean markdown tags and emojis for smoother speech
       final cleanText = text
           .replaceAll(RegExp(r'\*+'), '')
           .replaceAll(RegExp(r'#+'), '')
@@ -119,7 +126,10 @@ class AiVoiceService {
           .replaceAll(RegExp(r'[✅❌📊🔍⚡🌳📑🧾👥📦🗄️]'), '')
           .trim();
 
-      if (cleanText.isEmpty) return;
+      if (cleanText.isEmpty) {
+        onComplete?.call();
+        return;
+      }
 
       isSpeaking = true;
       if (onComplete != null) {
@@ -132,6 +142,7 @@ class AiVoiceService {
       await _tts.speak(cleanText);
     } catch (e) {
       isSpeaking = false;
+      onComplete?.call();
       debugPrint('TTS Speak Error: $e');
     }
   }

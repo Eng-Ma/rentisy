@@ -132,8 +132,12 @@ class AiService {
 
         return '''
 أنت المحاسب المالي الذكي وخبير ERP لنظام المحاسبة وإدارة المستودعات.
-أنت متصل بالفعل بقاعدة بيانات النظام الحقيقية ولديك كافة الصلاحيات لقراءتها والتعديل عليها.
-لا تخبر المستخدم أبداً أنك لا تملك صلاحية أو تطلب منه مفاتيح للوصول إلى قاعدة البيانات.
+أنت متصل بالفعل بقاعدة بيانات النظام الحقيقية.
+
+قواعد صارمة جداً لمنع الهلوسة والردود الوهمية:
+1. يُمنع منعاً باتاً أن تدّعي أنك أضفت أو حذفت أو عدّلت أي سجل (فاتورة، سند، عميل، صنف) إذا لم تُنفذ العملية برمجياً.
+2. إذا طلب المستخدم عملية إضافة أو تعديل أو حذف ولم تكن منفذة، وجّهه بالصيغة المباشرة (مثل: "اعملي سند قبض 500" أو "أضف عميل اسمه...").
+3. لا تؤلف أرقاماً مالية غير الموجودة في البيانات الحقيقية أدناه.
 
 البيانات المالية الحقيقية اللحظية للنظام الآن:
 - صافي الأرباح: $profit ر.س
@@ -149,7 +153,7 @@ class AiService {
       }
     } catch (_) {}
 
-    return 'أنت محاسب مالي ذكي وخبير في النظام. أجب باختصار شديد وبالأرقام المالية المباشرة.';
+    return 'أنت محاسب مالي ذكي وخبير في النظام. أجب باختصار شديد وبالأرقام المالية المباشرة وتجنب اختلاق عمليات غير منفذة.';
   }
 
   // =========================================================================
@@ -435,6 +439,13 @@ class AiService {
       return null;
     }
 
+    // Helper: Extract Phone Number
+    String? extractPhone() {
+      final match = RegExp(r'(05\d{8}|0\d{9}|\+?\d{10,14})').firstMatch(p);
+      if (match != null) return match.group(1);
+      return null;
+    }
+
     // -------------------------------------------------------------
     // 0. DIRECT RAW SQL EXECUTION (SELECT / UPDATE / INSERT / DELETE)
     // -------------------------------------------------------------
@@ -457,7 +468,7 @@ class AiService {
           return _msg('✅ ${res['message'] ?? 'تم تنفيذ استعلام SQL بنجاح.'}', [action]);
         }
       } else {
-        return _msg('تعذر تنفيذ الاستعلام: ${action.result}', [action]);
+        return _msg('❌ تعذر تنفيذ الاستعلام في قاعدة البيانات: ${action.result}', [action]);
       }
     }
 
@@ -492,6 +503,8 @@ class AiService {
 • المبلغ الجديد: ${newAmount.toStringAsFixed(2)} ر.س
 • تم تحديث وترحيل القيد المحاسبي وأرصدة الصندوق آلياً.
 ''', action);
+          } else {
+            return _resultMsg('❌ تعذر تعديل السند في قاعدة البيانات: ${action.result}', action);
           }
         }
       }
@@ -637,7 +650,7 @@ class AiService {
         if (p.contains('الغ') || p.contains('إلغاء')) status = 'cancelled';
 
         final action = await executeTool('update_check_status', {'id': id, 'status': status});
-        return _resultMsg('تم تحديث حالة الشيك #$id إلى ($status) وترحيل قيوده آلياً.', action);
+        return _resultMsg('✅ تم تحديث حالة الشيك #$id إلى ($status) وترحيل قيوده آلياً في قاعدة البيانات.', action);
       }
     }
 
@@ -767,15 +780,18 @@ class AiService {
       final isCreating = hasCreationVerb(p);
       if (isCreating && !hasListingVerb(p)) {
         final isVendor = p.contains('مورد');
-        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|عميل|مورد|زبون|جديد|جديدة|اسمه|باسم|شركة|مؤسسة)'), '').trim();
+        final phone = extractPhone();
+        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|عميل|مورد|زبون|جديد|جديدة|اسمه|باسم|شركة|مؤسسة|هاتفه|رقم|جوال)'), '').trim();
+        if (phone != null) name = name.replaceAll(phone, '').trim();
         if (name.isEmpty) name = isVendor ? 'مورد جديد' : 'عميل جديد';
 
         final action = await executeTool('create_party', {
           'name': name,
           'type': isVendor ? 'vendor' : 'customer',
+          'phone': phone ?? '0500000000',
         });
 
-        return _resultMsg('✅ تم إضافة ${isVendor ? 'المورد' : 'العميل'} "$name" بنجاح إلى النظام.', action);
+        return _resultMsg('✅ تم إضافة ${isVendor ? 'المورد' : 'العميل'} "$name" بنجاح إلى قاعدة بيانات النظام.', action);
       }
 
       // LIST PARTIES
@@ -799,16 +815,18 @@ class AiService {
     if (p.contains('صنف') || p.contains('منتج') || p.contains('أصناف') || p.contains('الاصناف') || p.contains('المستودع') || p.contains('المخزون')) {
       final isCreating = hasCreationVerb(p);
       if (isCreating && !hasListingVerb(p)) {
-        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|صنف|منتج|جديد|جديدة|اسمه|باسم)'), '').trim();
+        final price = extractAmount() ?? 100.0;
+        String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|صنف|منتج|جديد|جديدة|اسمه|باسم|سعره|سعر|ريال|ر.س)'), '').trim();
+        name = name.replaceAll(price.toString(), '').replaceAll(price.toInt().toString(), '').trim();
         if (name.isEmpty) name = 'صنف جديد';
 
         final action = await executeTool('create_item', {
           'name': name,
-          'sales_price': extractAmount() ?? 100.0,
-          'purchase_price': (extractAmount() ?? 100.0) * 0.8,
+          'sales_price': price,
+          'purchase_price': price * 0.8,
         });
 
-        return _resultMsg('✅ تم إضافة الصنف "$name" إلى دليل المستودعات بنجاح.', action);
+        return _resultMsg('✅ تم إضافة الصنف "$name" بسعر بيع ${price.toStringAsFixed(2)} ر.س إلى دليل المستودعات بنجاح.', action);
       }
 
       // LIST ITEMS
@@ -907,14 +925,14 @@ class AiService {
       }
     }
 
-    return null; // Forward to LLM for other queries
+    return null; // Forward to LLM for conversational questions
   }
 
   static AiMessage _resultMsg(String text, AiToolAction action) {
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: action.isSuccess ? text : 'تعذر تنفيذ العملية: ${action.result}',
+      text: action.isSuccess ? text : '❌ تعذر تنفيذ العملية في قاعدة البيانات: ${action.result}',
       timestamp: DateTime.now(),
       executedActions: [action],
     );

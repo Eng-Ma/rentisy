@@ -903,16 +903,21 @@ class AiService {
     if (p.contains('فاتورة') || p.contains('فاتوره') || p.contains('فواتير') || p.contains('الفواتير')) {
       final isCreating = hasCreationVerb(p);
       if (isCreating && !hasListingVerb(p)) {
-        final isPurchase = p.contains('شراء') || p.contains('مشتريات');
+        final isPurchase = p.contains('شراء') || p.contains('مشتريات') || p.contains('شريت') || p.contains('اشتريت');
         final type = isPurchase ? 'purchase' : 'sale';
+        final amount = extractAmount() ?? 100.0;
+        final partyName = extractCleanEntityName(p);
 
         final action = await executeTool('create_invoice', {
           'type': type,
+          'amount': amount,
+          'party_name': partyName,
           'notes': p,
         });
 
         final typeText = isPurchase ? 'مشتريات' : 'مبيعات';
-        return _resultMsg('✅ تم إنشاء فاتورة $typeText جديدة وتحديث أرصدة المخازن والقيود المحاسبية بنجاح.', action);
+        final partyInfo = (partyName != null && partyName.isNotEmpty) ? ' للطرف ($partyName)' : '';
+        return _resultMsg('✅ تم تسجيل فاتورة $typeText جديدة بمبلغ ${amount.toStringAsFixed(2)} ر.س$partyInfo وترحيل قيودها المحاسبية بنجاح.', action);
       }
 
       // LIST INVOICES
@@ -1230,27 +1235,32 @@ class AiService {
         case 'create_invoice':
           final rawType = args['type']?.toString().toLowerCase() ?? 'sale';
           final type = rawType.contains('purchase') ? 'purchase' : 'sale';
+          final double amount = (args['amount'] is num) ? (args['amount'] as num).toDouble() : (double.tryParse(args['amount']?.toString() ?? '100') ?? 100.0);
 
           int? storeId = args['store_id'];
           if (storeId == null) {
             final stores = await ApiService.get(ApiEndpoints.stores);
-            if (stores.success && stores.data is List && (stores.data as List).isNotEmpty) {
-              storeId = (stores.data as List).first['id'];
+            if (stores.success) {
+              final list = stores.data is List ? (stores.data as List) : ((stores.rawJson is Map && stores.rawJson['data'] is List) ? stores.rawJson['data'] as List : []);
+              if (list.isNotEmpty) storeId = list.first['id'];
             }
           }
 
           int? partyId = args['party_id'];
-          if (partyId == null) {
+          if (partyId == null && args['party_name'] == null) {
             final parties = await ApiService.get(ApiEndpoints.parties);
-            if (parties.success && parties.data is List && (parties.data as List).isNotEmpty) {
-              partyId = (parties.data as List).first['id'];
+            if (parties.success) {
+              final list = parties.data is List ? (parties.data as List) : ((parties.rawJson is Map && parties.rawJson['data'] is List) ? parties.rawJson['data'] as List : []);
+              if (list.isNotEmpty) partyId = list.first['id'];
             }
           }
 
           final res = await ApiService.post(ApiEndpoints.invoices, body: {
             'type': type,
-            'party_id': partyId,
-            'store_id': storeId,
+            if (partyId != null) 'party_id': partyId,
+            if (args['party_name'] != null) 'party_name': args['party_name'],
+            if (storeId != null) 'store_id': storeId,
+            'amount': amount,
             'date': DateTime.now().toString().substring(0, 10),
             'notes': args['notes'] ?? 'فاتورة منشأة بواسطة المساعد المحاسبي الذكي',
             'lines': args['lines'] ?? [],

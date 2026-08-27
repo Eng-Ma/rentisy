@@ -60,6 +60,77 @@ class InvoiceApiController extends Controller
 
     public function store(Request $request)
     {
+        // 1. Auto-resolve Store if missing
+        if (!$request->filled('store_id') || !Store::where('id', $request->input('store_id'))->exists()) {
+            $store = Store::where('is_active', true)->first() ?? Store::first();
+            if (!$store) {
+                $store = Store::create([
+                    'name' => 'المستودع الرئيسي',
+                    'is_active' => true,
+                ]);
+            }
+            $request->merge(['store_id' => $store->id]);
+        }
+
+        // 2. Auto-resolve Party if missing or party_name provided
+        $type = $request->input('type', 'sale');
+        if (!$request->filled('party_id') || !Party::where('id', $request->input('party_id'))->exists()) {
+            $partyName = $request->input('party_name');
+            $party = null;
+            if ($partyName) {
+                $party = Party::where('name', 'like', "%{$partyName}%")->first();
+                if (!$party) {
+                    $party = Party::create([
+                        'name' => trim($partyName),
+                        'type' => in_array($type, ['sale', 'sale_return']) ? 'customer' : 'vendor',
+                        'phone' => '0500000000',
+                    ]);
+                }
+            }
+            if (!$party) {
+                $expectedType = in_array($type, ['sale', 'sale_return']) ? 'customer' : 'vendor';
+                $party = Party::where('type', $expectedType)->first() ?? Party::first();
+                if (!$party) {
+                    $party = Party::create([
+                        'name' => in_array($type, ['sale', 'sale_return']) ? 'عميل عام' : 'مورد عام',
+                        'type' => $expectedType,
+                        'phone' => '0500000000',
+                    ]);
+                }
+            }
+            $request->merge(['party_id' => $party->id]);
+        }
+
+        // 3. Auto-resolve Date
+        if (!$request->filled('date')) {
+            $request->merge(['date' => date('Y-m-d')]);
+        }
+
+        // 4. Auto-resolve Lines if empty or missing
+        $lines = $request->input('lines');
+        if (empty($lines) || !is_array($lines) || count($lines) === 0) {
+            $amount = (float)($request->input('amount') ?? $request->input('total_amount') ?? 100);
+            $item = Item::where('is_active', true)->first() ?? Item::first();
+            if (!$item) {
+                $item = Item::create([
+                    'name' => 'صنف عام / خدمات',
+                    'purchase_price' => $amount,
+                    'sales_price' => $amount,
+                    'unit' => 'piece',
+                    'is_active' => true,
+                ]);
+            }
+            $request->merge([
+                'lines' => [
+                    [
+                        'item_id' => $item->id,
+                        'quantity' => 1,
+                        'unit_price' => $amount,
+                    ]
+                ]
+            ]);
+        }
+
         $validated = $request->validate([
             'type' => 'required|in:purchase,sale,purchase_return,sale_return',
             'date' => 'required|date',

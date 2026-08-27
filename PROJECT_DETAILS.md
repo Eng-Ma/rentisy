@@ -19,7 +19,9 @@
 11. **Cost Centers (`/api/cost-centers`)**: Projects and branches expense tracking.
 12. **AI Direct Database Engine (`/api/ai/query`, `/api/ai/schema`, `/api/ai/search`)**: Real SQL execution, table schema inspector, universal full-database search.
 
-## AI Assistant Architecture
+## AI Assistant & Live Voice Call
+- **Live Voice Call Mode (`AiVoiceCallScreen`)**: Real-time conversational voice call with glowing pulsing audio visualizer (ChatGPT/Gemini Live style). Speaks Arabic TTS and transcribes Arabic voice commands.
+- **Microphone Input (`AiVoiceService`)**: Tap-to-speak voice transcription directly in chat bar.
 - **Natural Dialect Intent Engine**: Understands conversational Arabic dialects (`اعملي`, `سويلي`, `حط`, `ضيف`, `سجل`, `بدي`, `احذفه`, `خليها 1000`).
 - **Contextual Deletion & Updates**: Resolves targets by context (latest created entity), explicit ID, voucher number, or amount.
 - **Zero-Hallucination Guarantee**: All accounting actions are executed against real backend endpoints; failures return concise, token-efficient error summaries instead of stack traces.

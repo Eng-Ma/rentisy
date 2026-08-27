@@ -272,7 +272,7 @@ class AiService {
         await _streamOpenAiCompatible(normalizedPrompt, history, apiKey, model, baseUrl, systemPrompt, onChunk);
       }
     } catch (e) {
-      onChunk('\n\nحدث خطأ أثناء البث المباشر:\n$e', isDone: true);
+      onChunk('\n\n❌ تعذر الحصول على رد من نموذج الذكاء الاصطناعي. يرجى التحقق من مفتاح API أو اتصال الإنترنت.', isDone: true);
     }
   }
 
@@ -908,9 +908,14 @@ class AiService {
     // -------------------------------------------------------------
     // 7. PARTIES: CREATION vs LISTING (العملاء والموردين)
     // -------------------------------------------------------------
-    if (p.contains('عميل') || p.contains('مورد') || p.contains('عملاء') || p.contains('موردين') || p.contains('زبون')) {
+    // 7. PARTIES: CUSTOMERS & SUPPLIERS (العملاء والموردين والناس والزبائن)
+    // -------------------------------------------------------------
+    if (p.contains('عميل') || p.contains('مورد') || p.contains('عملاء') || p.contains('موردين') ||
+        p.contains('زبون') || p.contains('زبائن') || p.contains('الناس') || p.contains('أشخاص') ||
+        p.contains('اشخاص') || p.contains('أطراف') || p.contains('اطراف') || p.contains('الشركات') ||
+        p.contains('المتعاملين')) {
       final isCreating = hasCreationVerb(p);
-      if (isCreating && !hasListingVerb(p)) {
+      if (isCreating && !hasListingVerb(p) && !p.contains('كل') && !p.contains('هات')) {
         final isVendor = p.contains('مورد');
         final phone = extractPhone();
         String name = p.replaceAll(RegExp(r'(اعمل|اعملي|سوي|سويلي|حط|ضيف|أضف|اضف|إضافة|سجل|عميل|مورد|زبون|جديد|جديدة|اسمه|باسم|شركة|مؤسسة|هاتفه|رقم|جوال)'), '').trim();
@@ -926,16 +931,18 @@ class AiService {
         return _resultMsg('✅ تم إضافة ${isVendor ? 'المورد' : 'العميل'} "$name" بنجاح إلى قاعدة بيانات النظام.', action);
       }
 
-      // LIST PARTIES
-      final action = await executeTool('get_parties_list', {'search': p.replaceAll(RegExp(r'(عملاء|موردين|العملاء|الموردين|ديون|ذمم|ابحث|عن|اعرض|فحص|فلتر|ورجيني|فرجيني)'), '').trim()});
+      // LIST PARTIES (الناس / العملاء / الموردين)
+      final searchKey = p.replaceAll(RegExp(r'(اسمع|هات|لي|كل|الناس|اللي|عندي|يعني|في|النظام|عملاء|موردين|العملاء|الموردين|ديون|ذمم|ابحث|عن|اعرض|فحص|فلتر|ورجيني|فرجيني|أشخاص|اشخاص|زبائن|زبون|أطراف|اطراف)'), '').trim();
+      final action = await executeTool('get_parties_list', {'search': searchKey});
       if (action.isSuccess && action.result is List) {
         final parties = action.result as List;
-        if (parties.isEmpty) return _msg('👥 لم يتم العثور على أطراف مطابقة للبحث.', [action]);
-        final buf = StringBuffer('👥 قائمة العملاء والموردين (${parties.length}):\n\n');
-        for (int i = 0; i < parties.length && i < 12; i++) {
+        if (parties.isEmpty) return _msg('👥 لم يتم العثور على أطراف أو أشخاص مسجلين بالنظام.', [action]);
+        final buf = StringBuffer('👥 قائمة الأشخاص والعملاء والموردين المسجلين في النظام (${parties.length}):\n\n');
+        for (int i = 0; i < parties.length && i < 20; i++) {
           final pt = parties[i];
-          final type = pt['type'] == 'customer' ? 'عميل' : 'مورد';
-          buf.writeln('${i + 1}. **${pt['name']}** ($type) — هاتف: ${pt['phone'] ?? '-'}');
+          final type = pt['type'] == 'customer' ? 'عميل' : (pt['type'] == 'vendor' ? 'مورد' : 'طرف');
+          final phone = (pt['phone'] != null && pt['phone'].toString().isNotEmpty) ? pt['phone'] : 'بدون هاتف';
+          buf.writeln('${i + 1}. **${pt['name']}** ($type) — 📞 $phone');
         }
         return _msg(buf.toString().trim(), [action]);
       }

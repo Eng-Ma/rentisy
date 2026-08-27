@@ -77,8 +77,10 @@ class AiVoiceService {
       onStatus?.call('listening');
 
       await _speech.listen(
-        localeId: 'ar_SA',
-        listenMode: ListenMode.confirmation,
+        localeId: 'ar',
+        listenMode: ListenMode.dictation,
+        listenFor: const Duration(hours: 1),
+        pauseFor: const Duration(seconds: 4),
         onResult: (result) {
           final words = result.recognizedWords;
           if (words.isNotEmpty) {
@@ -86,7 +88,7 @@ class AiVoiceService {
           }
         },
         onSoundLevelChange: onSoundLevelChange,
-        cancelOnError: true,
+        cancelOnError: false,
         partialResults: true,
       );
     } catch (e) {

@@ -91,18 +91,27 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
 
         // Reset silence timer whenever new words arrive
         _speechSilenceTimer?.cancel();
-        _speechSilenceTimer = Timer(const Duration(milliseconds: 1500), () {
-          // If user stopped speaking for 1.5 seconds, process the command!
+        _speechSilenceTimer = Timer(const Duration(milliseconds: 1400), () {
+          // If user stopped speaking for 1.4 seconds, process the command!
           if (_liveSpeechText.trim().isNotEmpty) {
             _processUserVoiceCommand(_liveSpeechText.trim());
           }
         });
       },
       onStatus: (status) {
-        if (!mounted) return;
+        if (!mounted || _isMuted) return;
         if (status == 'done' || status == 'notListening') {
-          if (_callStatus == 'listening' && _liveSpeechText.trim().isNotEmpty) {
-            _processUserVoiceCommand(_liveSpeechText.trim());
+          if (_callStatus == 'listening') {
+            if (_liveSpeechText.trim().isNotEmpty) {
+              _processUserVoiceCommand(_liveSpeechText.trim());
+            } else {
+              // Automatically restart listening seamlessly so it never stops!
+              Future.delayed(const Duration(milliseconds: 300), () {
+                if (mounted && !_isMuted && _callStatus == 'listening') {
+                  _listenToUser();
+                }
+              });
+            }
           }
         }
       },
@@ -130,9 +139,15 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
           if (!mounted) return;
 
           setState(() {
-            _callStatus = 'idle';
             _assistantSpeechText = responseText;
             _lastActions = actions ?? [];
+          });
+
+          // Resume listening loop automatically after short pause!
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (mounted && !_isMuted) {
+              _listenToUser();
+            }
           });
         },
       );
@@ -141,6 +156,12 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
       setState(() {
         _callStatus = 'error';
         _assistantSpeechText = 'حدث خطأ أثناء معالجة الأمر: $e';
+      });
+
+      Future.delayed(const Duration(milliseconds: 2000), () {
+        if (mounted && !_isMuted) {
+          _listenToUser();
+        }
       });
     }
   }

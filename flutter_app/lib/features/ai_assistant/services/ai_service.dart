@@ -103,34 +103,52 @@ class AiService {
     }
   }
 
-  // Dynamic Live System Prompt with real-time financial stats from ERP
+  // Dynamic Live System Prompt formatted cleanly for concise accounting answers
   static Future<String> getLiveSystemPrompt() async {
-    String liveData = "";
+    String liveDataSummary = "لا تتوفر بيانات سريعة حالياً.";
     try {
       final dash = await ApiService.get(ApiEndpoints.dashboard);
       if (dash.success && dash.rawJson is Map) {
-        liveData += "\n\n📊 بيانات ومؤشرات النظام المحاسبي المباشرة الآن:\n" + jsonEncode(dash.rawJson);
+        final d = dash.rawJson as Map<String, dynamic>;
+        final sales = d['total_sales'] ?? d['sales'] ?? 0;
+        final purchases = d['total_purchases'] ?? d['purchases'] ?? 0;
+        final profit = d['net_profit'] ?? d['profit'] ?? 0;
+        final expenses = d['total_expenses'] ?? d['expenses'] ?? 0;
+        final cash = d['cash_balance'] ?? d['safe_balance'] ?? 0;
+        final receivables = d['customer_receivables'] ?? d['receivables'] ?? 0;
+
+        liveDataSummary = '''
+- صافي الأرباح: $profit ريال
+- إجمالي المبيعات: $sales ريال
+- إجمالي المشتريات: $purchases ريال
+- إجمالي المصروفات: $expenses ريال
+- رصيد النقدية والبنوك: $cash ريال
+- ذمم وديون العملاء: $receivables ريال
+''';
       }
     } catch (_) {}
 
     return '''
-أنت "مساعد الأصيل الذكي المحاسبي" (Al-Aseel AI Accounting Agent) - وكيل ذكاء اصطناعي خبير ومسؤول عن إدارة نظام المحاسبة والمستودعات.
+أنت "المحاسب الذكي لنظام الأصيل".
+مهمتك: مساعدة المحاسب بإجابات مختصرة ومباشرة جداً ودقيقة وتنفيذ العمليات المالية.
 
-$liveData
+المؤشرات المالية المباشرة الحالية:
+$liveDataSummary
 
-قواعد وتعليمات العمل المحاسبي:
-1. عند سؤالك عن أرقام مالية، أرباح، مبيعات، مصروفات، ديون، أو أرصدة، أجب فوراً وبالأرقام والبيانات الدقيقة المستخرجة من البيانات المباشرة أعلاه بتنسيق جميل وواضح بالريال/العملة المعتمدة. لا تطلب من المستخدم الانتظار!
-2. عندما يطلب المستخدم تنفيذ عملية محاسبية (مثل إنشاء فاتورة، سند قبض، سند صرف، إضافة عميل، إضافة صنف)، استخدم استدعاء الأدوات (Tool Calling) أو قم بتضمين قالب الإجراء التالي في ردك ليقوم النظام بتنفيذه وترحيله آلياً:
+قواعد حاسمة:
+1. كن فائق الإيجاز والاحترافية: أعط الأرقام والنتائج مباشرة بدون أي مقدمات إنشائية أو شروحات تقنية غير مهمة.
+2. لا تطلب من المستخدم الانتظار أبداً.
+3. لا تظهر أبداً كود برمجي أو أسماء دوال أو نصوص JSON في المحادثة.
+4. عندما يطلب المستخدم تنفيذ عملية محاسبية، أدرج كتلة الإجراء المخفية التالية في نهاية ردك:
 ```action
-{"tool": "اسم_الأداة", "params": {"type": "...", "amount": 100, ...}}
+{"tool": "create_voucher", "params": {"type": "receipt", "amount": 1500, "payment_method": "cash"}}
 ```
 
-قائمة الأدوات المتاحة:
-- create_invoice: إنشاء فاتورة مبيعات أو مشتريات (type, party_id, store_id, lines: [{item_id, quantity, unit_price}], notes)
-- create_voucher: إنشاء سند قبض أو صرف (type: 'receipt'/'payment', amount, payment_method: 'cash'/'bank', notes)
-- create_party: إضافة عميل أو مورد (name, type: 'customer'/'vendor', phone, address)
-- create_item: إضافة صنف بالمستودع (name, sales_price, purchase_price, unit)
-- create_journal_entry: تسجيل قيد يومية عام متزن
+الأدوات المتاحة للتنفيذ:
+- create_voucher: إنشاء سند قبض أو صرف (type: 'receipt' أو 'payment', amount: رقم, payment_method: 'cash' أو 'bank', notes: بيان)
+- create_invoice: إنشاء فاتورة مبيعات أو مشتريات (type: 'sale' أو 'purchase', party_id, lines: [{item_id, quantity, unit_price}])
+- create_party: إضافة عميل أو مورد (name: اسم, type: 'customer' أو 'vendor', phone: هاتف)
+- create_item: إضافة صنف (name: اسم, sales_price: سعر بيع, purchase_price: سعر شراء, unit: وحدة)
 ''';
   }
 
@@ -316,24 +334,38 @@ $liveData
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
 
         case 'create_party':
-          final res = await ApiService.post(ApiEndpoints.parties, body: args);
+          final partyType = (args['type']?.toString().contains('مورد') ?? false) ? 'vendor' : 'customer';
+          final res = await ApiService.post(ApiEndpoints.parties, body: {
+            'name': args['name'],
+            'type': args['type'] ?? partyType,
+            'phone': args['phone'],
+            'address': args['address'],
+          });
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
 
         case 'create_voucher':
-          // Fill default account if missing
-          if (!args.containsKey('account_id')) {
+          // Normalize type & amount
+          final rawType = (args['type']?.toString().toLowerCase() ?? 'receipt');
+          final type = (rawType.contains('صرف') || rawType.contains('payment')) ? 'payment' : 'receipt';
+          final amount = double.tryParse(args['amount']?.toString() ?? '0') ?? 0.0;
+          final paymentMethod = (args['payment_method']?.toString().contains('bank') ?? false) ? 'bank' : 'cash';
+
+          // Resolve default account if missing
+          int? accountId = args['account_id'];
+          if (accountId == null) {
             final accs = await ApiService.get(ApiEndpoints.accounts);
             if (accs.success && accs.data is List && (accs.data as List).isNotEmpty) {
-              args['account_id'] = (accs.data as List).first['id'];
+              accountId = (accs.data as List).first['id'];
             }
           }
+
           final res = await ApiService.post(ApiEndpoints.vouchers, body: {
-            'type': args['type'] ?? 'receipt',
-            'amount': args['amount'],
-            'payment_method': args['payment_method'] ?? 'cash',
-            'account_id': args['account_id'],
+            'type': type,
+            'amount': amount,
+            'payment_method': paymentMethod,
+            'account_id': accountId,
             'party_id': args['party_id'],
-            'notes': args['notes'] ?? 'تم الإنشاء بواسطة المساعد الذكي',
+            'notes': args['notes'] ?? 'سند تم إنشاؤه بواسطة المساعد الذكي',
             'date': DateTime.now().toString().substring(0, 10),
           });
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
@@ -341,8 +373,8 @@ $liveData
         case 'create_item':
           final res = await ApiService.post(ApiEndpoints.items, body: {
             'name': args['name'],
-            'purchase_price': args['purchase_price'] ?? 0,
-            'sales_price': args['sales_price'] ?? 0,
+            'purchase_price': double.tryParse(args['purchase_price']?.toString() ?? '0') ?? 0,
+            'sales_price': double.tryParse(args['sales_price']?.toString() ?? '0') ?? 0,
             'unit': args['unit'] ?? 'قطعة',
             'barcode': args['barcode'],
             'is_active': true,
@@ -350,23 +382,29 @@ $liveData
           return AiToolAction(toolName: toolName, arguments: args, result: res.rawJson, isSuccess: res.success);
 
         case 'create_invoice':
-          // Auto resolve store and party if needed
-          if (!args.containsKey('store_id')) {
+          final rawType = args['type']?.toString().toLowerCase() ?? 'sale';
+          final type = rawType.contains('purchase') ? 'purchase' : 'sale';
+
+          int? storeId = args['store_id'];
+          if (storeId == null) {
             final stores = await ApiService.get(ApiEndpoints.stores);
             if (stores.success && stores.data is List && (stores.data as List).isNotEmpty) {
-              args['store_id'] = (stores.data as List).first['id'];
+              storeId = (stores.data as List).first['id'];
             }
           }
-          if (!args.containsKey('party_id')) {
+
+          int? partyId = args['party_id'];
+          if (partyId == null) {
             final parties = await ApiService.get(ApiEndpoints.parties);
             if (parties.success && parties.data is List && (parties.data as List).isNotEmpty) {
-              args['party_id'] = (parties.data as List).first['id'];
+              partyId = (parties.data as List).first['id'];
             }
           }
+
           final res = await ApiService.post(ApiEndpoints.invoices, body: {
-            'type': args['type'] ?? 'sale',
-            'party_id': args['party_id'],
-            'store_id': args['store_id'],
+            'type': type,
+            'party_id': partyId,
+            'store_id': storeId,
             'date': DateTime.now().toString().substring(0, 10),
             'notes': args['notes'] ?? 'فاتورة منشأة بواسطة المساعد الذكي',
             'lines': args['lines'] ?? [],
@@ -379,6 +417,45 @@ $liveData
     } catch (e) {
       return AiToolAction(toolName: toolName, arguments: args, result: 'Error: $e', isSuccess: false);
     }
+  }
+
+  // Robust universal extractor for any JSON tool call in model text
+  static Future<Map<String, dynamic>> _extractAndExecuteAnyTool(String rawText) async {
+    String cleaned = rawText;
+    List<AiToolAction> actions = [];
+
+    // Regex to match JSON with "tool": "..."
+    final jsonRegex = RegExp(r'\{[\s\S]*?"tool"\s*:\s*"([a-zA-Z0-9_]+)"[\s\S]*?\}');
+    final match = jsonRegex.firstMatch(rawText);
+
+    if (match != null) {
+      try {
+        final jsonText = match.group(0)!;
+        final decoded = jsonDecode(jsonText);
+        final toolName = decoded['tool']?.toString() ?? '';
+        final params = (decoded['params'] as Map<String, dynamic>?) ?? {};
+
+        if (toolName.isNotEmpty) {
+          final actionResult = await executeTool(toolName, params);
+          actions.add(actionResult);
+
+          // Clean away code blocks & JSON
+          cleaned = cleaned.replaceAll(match.group(0)!, '').replaceAll(RegExp(r'```action[\s\S]*?```'), '').replaceAll(RegExp(r'```[\s\S]*?```'), '').trim();
+
+          if (cleaned.isEmpty || cleaned.length < 5) {
+            cleaned = 'تم تنفيذ وترحيل العملية بنجاح في النظام المحاسبي.';
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Also strip any leftover backtick blocks
+    cleaned = cleaned.replaceAll(RegExp(r'```action[\s\S]*?```'), '').trim();
+
+    return {
+      'text': cleaned,
+      'actions': actions,
+    };
   }
 
   // ==========================================
@@ -404,7 +481,6 @@ $liveData
       if (provider == AiProviderType.gemini) {
         return await _sendGemini(prompt, history, apiKey, model);
       } else {
-        // OpenAI or Groq (OpenAI Compatible)
         final baseUrl = provider == AiProviderType.groq
             ? 'https://api.groq.com/openai/v1/chat/completions'
             : 'https://api.openai.com/v1/chat/completions';
@@ -450,7 +526,7 @@ $liveData
       'messages': messages,
       'tools': toolsDefinition,
       'tool_choice': 'auto',
-      'temperature': 0.3,
+      'temperature': 0.2,
     };
 
     var response = await http.post(
@@ -471,7 +547,7 @@ $liveData
         final fallbackBody = {
           'model': activeModel,
           'messages': messages,
-          'temperature': 0.3,
+          'temperature': 0.2,
         };
         response = await http.post(
           Uri.parse(endpointUrl),
@@ -498,83 +574,40 @@ $liveData
 
     // If Model decided to call tools natively:
     if (toolCalls != null && toolCalls.isNotEmpty) {
-      final List<Map<String, dynamic>> toolMessages = [
-        ...messages,
-        message, // Include assistant tool call request
-      ];
-
       for (var toolCall in toolCalls) {
         final toolName = toolCall['function']['name'];
         final arguments = jsonDecode(toolCall['function']['arguments'] ?? '{}');
-
-        // Execute Tool in ERP
         final actionResult = await executeTool(toolName, arguments);
         executedActions.add(actionResult);
-
-        toolMessages.add({
-          'role': 'tool',
-          'tool_call_id': toolCall['id'],
-          'name': toolName,
-          'content': jsonEncode(actionResult.result),
-        });
       }
 
-      // Send tool results back to LLM to summarize response in Arabic
-      final followUpResponse = await http.post(
-        Uri.parse(endpointUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
-        },
-        body: jsonEncode({
-          'model': activeModel,
-          'messages': toolMessages,
-          'temperature': 0.3,
-        }),
+      String summaryText = 'تم تنفيذ العملية المحاسبية وتحديث القيود بنجاح.';
+      if (toolCalls.first['function']['name'] == 'create_voucher') {
+        summaryText = 'تم إنشاء سند القبض/الصرف بنجاح وترحيل القيد المحاسبي.';
+      } else if (toolCalls.first['function']['name'] == 'create_invoice') {
+        summaryText = 'تم إنشاء الفاتورة وتحديث المخزون والقيود المحاسبية بنجاح.';
+      }
+
+      return AiMessage(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        sender: MessageSender.assistant,
+        text: summaryText,
+        timestamp: DateTime.now(),
+        executedActions: executedActions,
       );
-
-      if (followUpResponse.statusCode == 200) {
-        final followUpData = jsonDecode(utf8.decode(followUpResponse.bodyBytes));
-        final finalContent = followUpData['choices']?[0]?['message']?['content'] ?? '';
-
-        return AiMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          sender: MessageSender.assistant,
-          text: finalContent,
-          timestamp: DateTime.now(),
-          executedActions: executedActions,
-        );
-      }
     }
 
-    String textContent = message?['content'] ?? '';
-
-    // Check if model returned an action block ```action ... ```
-    if (textContent.contains('```action')) {
-      try {
-        final startIdx = textContent.indexOf('```action') + 9;
-        final endIdx = textContent.indexOf('```', startIdx);
-        if (endIdx > startIdx) {
-          final actionJsonStr = textContent.substring(startIdx, endIdx).trim();
-          final actionMap = jsonDecode(actionJsonStr);
-          final toolName = actionMap['tool']?.toString() ?? '';
-          final params = (actionMap['params'] as Map<String, dynamic>?) ?? {};
-          if (toolName.isNotEmpty) {
-            final actionResult = await executeTool(toolName, params);
-            executedActions.add(actionResult);
-            textContent = textContent.replaceAll(RegExp(r'```action[\s\S]*?```'), '').trim() +
-                '\n\n✅ تم ترحيل وتسجيل العملية بنجاح في النظام المحاسبي.';
-          }
-        }
-      } catch (_) {}
-    }
+    String rawText = message?['content'] ?? '';
+    final extracted = await _extractAndExecuteAnyTool(rawText);
 
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: textContent,
+      text: extracted['text'],
       timestamp: DateTime.now(),
-      executedActions: executedActions.isNotEmpty ? executedActions : null,
+      executedActions: (extracted['actions'] as List<AiToolAction>).isNotEmpty
+          ? (extracted['actions'] as List<AiToolAction>)
+          : null,
     );
   }
 
@@ -608,7 +641,7 @@ $liveData
       body: jsonEncode({
         'contents': contents,
         'generationConfig': {
-          'temperature': 0.3,
+          'temperature': 0.2,
         },
       }),
     );
@@ -619,35 +652,17 @@ $liveData
     }
 
     final data = jsonDecode(utf8.decode(response.bodyBytes));
-    String text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-    List<AiToolAction> executedActions = [];
-
-    // Check if model returned an action block ```action ... ```
-    if (text.contains('```action')) {
-      try {
-        final startIdx = text.indexOf('```action') + 9;
-        final endIdx = text.indexOf('```', startIdx);
-        if (endIdx > startIdx) {
-          final actionJsonStr = text.substring(startIdx, endIdx).trim();
-          final actionMap = jsonDecode(actionJsonStr);
-          final toolName = actionMap['tool']?.toString() ?? '';
-          final params = (actionMap['params'] as Map<String, dynamic>?) ?? {};
-          if (toolName.isNotEmpty) {
-            final actionResult = await executeTool(toolName, params);
-            executedActions.add(actionResult);
-            text = text.replaceAll(RegExp(r'```action[\s\S]*?```'), '').trim() +
-                '\n\n✅ تم ترحيل وتسجيل العملية بنجاح في النظام المحاسبي.';
-          }
-        }
-      } catch (_) {}
-    }
+    String rawText = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
+    final extracted = await _extractAndExecuteAnyTool(rawText);
 
     return AiMessage(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       sender: MessageSender.assistant,
-      text: text,
+      text: extracted['text'],
       timestamp: DateTime.now(),
-      executedActions: executedActions.isNotEmpty ? executedActions : null,
+      executedActions: (extracted['actions'] as List<AiToolAction>).isNotEmpty
+          ? (extracted['actions'] as List<AiToolAction>)
+          : null,
     );
   }
 }

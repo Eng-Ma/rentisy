@@ -537,54 +537,89 @@ class AiService {
     }
 
     // -------------------------------------------------------------
-    // 1. DELETE ACTIONS (حذف أي عنصر من الـ 12 شاشة)
+    // 1. DELETE ACTIONS (احذفه / احذفها / امسحه / شيله / حذف بالرقم أو السياق)
     // -------------------------------------------------------------
-    if (p.contains('احذف') || p.contains('حذف') || p.contains('مسح') || p.contains('شيل')) {
+    if (p.startsWith('احذف') || p.startsWith('امسح') || p.startsWith('شيل') || p.startsWith('الغ') ||
+        p.contains('احذف') || p.contains('حذف') || p.contains('مسح') || p.contains('شيل')) {
       final id = extractId();
+
+      // If ID is given explicitly (e.g. "احذف السند رقم 2")
       if (id != null) {
         if (p.contains('سند')) {
           final action = await executeTool('delete_voucher', {'id': id});
-          return _resultMsg('تم حذف السند #$id وإلغاء قيوده بنجاح.', action);
+          return _resultMsg('✅ تم حذف السند #$id وإلغاء قيوده المحاسبية بنجاح.', action);
         }
         if (p.contains('فاتورة') || p.contains('فاتوره')) {
           final action = await executeTool('delete_invoice', {'id': id});
-          return _resultMsg('تم حذف الفاتورة #$id وإرجاع المخزون والقيود بنجاح.', action);
+          return _resultMsg('✅ تم حذف الفاتورة #$id وإرجاع المخزون والقيود بنجاح.', action);
         }
         if (p.contains('قيد')) {
           final action = await executeTool('delete_journal_entry', {'id': id});
-          return _resultMsg('تم حذف قيد اليومية #$id بنجاح.', action);
+          return _resultMsg('✅ تم حذف قيد اليومية #$id بنجاح.', action);
         }
         if (p.contains('شيك')) {
           final action = await executeTool('delete_check', {'id': id});
-          return _resultMsg('تم حذف الشيك #$id من الحافظة بنجاح.', action);
+          return _resultMsg('✅ تم حذف الشيك #$id من الحافظة بنجاح.', action);
         }
         if (p.contains('عرض سعر') || p.contains('عرض السعر')) {
           final action = await executeTool('delete_quotation', {'id': id});
-          return _resultMsg('تم حذف عرض السعر #$id بنجاح.', action);
+          return _resultMsg('✅ تم حذف عرض السعر #$id بنجاح.', action);
         }
         if (p.contains('صنف') || p.contains('منتج')) {
           final action = await executeTool('delete_item', {'id': id});
-          return _resultMsg('تم حذف الصنف #$id من المستودع بنجاح.', action);
+          return _resultMsg('✅ تم حذف الصنف #$id من المستودع بنجاح.', action);
         }
         if (p.contains('عميل') || p.contains('مورد') || p.contains('طرف')) {
           final action = await executeTool('delete_party', {'id': id});
-          return _resultMsg('تم حذف العميل/المورد #$id بنجاح.', action);
+          return _resultMsg('✅ تم حذف العميل/المورد #$id بنجاح.', action);
         }
         if (p.contains('حساب')) {
           final action = await executeTool('delete_account', {'id': id});
-          return _resultMsg('تم حذف الحساب #$id من شجرة الحسابات بنجاح.', action);
+          return _resultMsg('✅ تم حذف الحساب #$id من شجرة الحسابات بنجاح.', action);
         }
         if (p.contains('أصل') || p.contains('اصل')) {
           final action = await executeTool('delete_fixed_asset', {'id': id});
-          return _resultMsg('تم حذف الأصل الثابت #$id بنجاح.', action);
+          return _resultMsg('✅ تم حذف الأصل الثابت #$id بنجاح.', action);
         }
         if (p.contains('مركز تكلفة') || p.contains('مركز التكلفة')) {
           final action = await executeTool('delete_cost_center', {'id': id});
-          return _resultMsg('تم حذف مركز التكلفة #$id بنجاح.', action);
+          return _resultMsg('✅ تم حذف مركز التكلفة #$id بنجاح.', action);
         }
         if (p.contains('مناقلة') || p.contains('مناقله')) {
           final action = await executeTool('delete_stock_transfer', {'id': id});
-          return _resultMsg('تم حذف مناقلة المخزون #$id بنجاح.', action);
+          return _resultMsg('✅ تم حذف مناقلة المخزون #$id بنجاح.', action);
+        }
+      }
+
+      // If NO ID is given (e.g. "احذفه", "احذفها", "امسحه", "شيله", "احذف السند", "احذف آخر سند")
+      if (p.contains('فاتورة') || p.contains('فاتوره')) {
+        final invoicesAction = await executeTool('get_invoices', {});
+        final list = invoicesAction.result is List ? (invoicesAction.result as List) : ((invoicesAction.result is Map && invoicesAction.result['data'] is List) ? invoicesAction.result['data'] as List : []);
+        if (list.isNotEmpty) {
+          final target = list.first;
+          final action = await executeTool('delete_invoice', {'id': target['id']});
+          final num = target['invoice_number'] ?? '#${target['id']}';
+          return _resultMsg('✅ تم حذف الفاتورة **$num** وإرجاع المخزون والقيود بنجاح.', action);
+        }
+      } else if (p.contains('صنف') || p.contains('منتج')) {
+        final itemsAction = await executeTool('get_items_catalog', {});
+        final list = itemsAction.result is List ? (itemsAction.result as List) : [];
+        if (list.isNotEmpty) {
+          final target = list.first;
+          final action = await executeTool('delete_item', {'id': target['id']});
+          final name = target['name'] ?? '#${target['id']}';
+          return _resultMsg('✅ تم حذف الصنف **$name** من المستودع بنجاح.', action);
+        }
+      } else {
+        // Default target: Latest Voucher (most common interactive creation/deletion in chat)
+        final vouchersAction = await executeTool('get_vouchers', {});
+        final list = vouchersAction.result is List ? (vouchersAction.result as List) : ((vouchersAction.result is Map && vouchersAction.result['data'] is List) ? vouchersAction.result['data'] as List : []);
+        if (list.isNotEmpty) {
+          final target = list.first;
+          final action = await executeTool('delete_voucher', {'id': target['id']});
+          final num = target['voucher_number'] ?? '#${target['id']}';
+          final type = target['type'] == 'receipt' ? 'سند قبض' : 'سند صرف';
+          return _resultMsg('✅ تم حذف $type **$num** بقيمة ${target['amount']} ر.س وعكس القيد المحاسبي بنجاح.', action);
         }
       }
     }

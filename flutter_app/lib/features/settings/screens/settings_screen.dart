@@ -235,6 +235,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 16),
+
+            // Privacy Policy & Data Safety
+            InkWell(
+              onTap: () => _showPrivacyPolicy(context),
+              borderRadius: BorderRadius.circular(16),
+              child: GlassCard(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: const Row(
+                  children: [
+                    Icon(Icons.privacy_tip_rounded, color: AppColors.secondary, size: 22),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'سياسة الخصوصية وأمان البيانات',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          Text(
+                            'بيان استخدام الصلاحيات وحماية البيانات المالية',
+                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_left_rounded, color: Colors.grey),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
 
             // Logout Button
@@ -260,6 +292,114 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showPrivacyPolicy(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        return Container(
+          height: MediaQuery.of(ctx).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    const Icon(Icons.privacy_tip_rounded, color: AppColors.primary, size: 26),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'سياسة الخصوصية وأمان البيانات',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: const [
+                    Text(
+                      '1. خصوصية البيانات المالية',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'نحن نضع خصوصية وأمان بياناتك المالية في مقدمة أولوياتنا. جميع البيانات المحاسبية وسندات القبض والصرف والفواتير تُخزن بأمان ومشفرة ولا يتم بيعها أو مشاركتها مع أي طرف ثالث لأغراض إعلانية.',
+                      style: TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      '2. صلاحية المايكروفون (RECORD_AUDIO)',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'تُستخدم صلاحية المايكروفون حصراً لتمكين ميزة «المساعد المحاسبي الذكي والاتصال الصوتي المباشر» لتحويل الأوامر الصوتية إلى عمليات واستعلامات نصية. لا يتم حفظ أو تسجيل أي مقاطع صوتية على خوادم خارجية.',
+                      style: TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      '3. صلاحية الإنترنت والشبكة',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'تُستخدم لمزامنة البيانات المحاسبية مع خادمك السحابي الآمن عبر قنوات اتصال مشفرة HTTPS.',
+                      style: TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      '4. صلاحية البلوتوث',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'تُستخدم للاتصال بطابعات الفواتير والسندات المحمولة (POS Thermal Printers) لطباعة السندات والفواتير.',
+                      style: TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      '5. حذف وتصدير البيانات',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primary),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'يحق للمستخدم تصدير بياناته أو طلب حذف حسابه بالكامل في أي وقت من خلال التواصل مع الدعم الفني.',
+                      style: TextStyle(fontSize: 13, height: 1.5),
+                    ),
+                    SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

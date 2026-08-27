@@ -131,7 +131,26 @@ class AiService {
             'notes': cleanPrompt,
           });
 
-          final voucherNum = action.result is Map ? action.result['voucher_number'] ?? '' : '';
+          if (!action.isSuccess) {
+            return AiMessage(
+              id: DateTime.now().millisecondsSinceEpoch.toString(),
+              sender: MessageSender.assistant,
+              text: 'تعذر إنشاء السند في النظام: ${action.result}',
+              timestamp: DateTime.now(),
+              executedActions: [action],
+            );
+          }
+
+          String voucherNum = '';
+          if (action.result is Map) {
+            final map = action.result as Map;
+            if (map['data'] is Map && map['data']['voucher_number'] != null) {
+              voucherNum = '\n• رقم السند في النظام: ${map['data']['voucher_number']}';
+            } else if (map['voucher_number'] != null) {
+              voucherNum = '\n• رقم السند في النظام: ${map['voucher_number']}';
+            }
+          }
+
           final typeLabel = isPayment ? 'سند صرف' : 'سند قبض';
           final methodLabel = isBank ? 'حساب البنك' : 'الصندوق النقدي';
 
@@ -139,10 +158,10 @@ class AiService {
             id: DateTime.now().millisecondsSinceEpoch.toString(),
             sender: MessageSender.assistant,
             text: '''
-✅ تم إنشاء $typeLabel بنجاح!
+✅ تم إنشاء $typeLabel بنجاح في قاعدة البيانات!$voucherNum
 • المبلغ: ${amount.toStringAsFixed(2)} ر.س
 • طريقة الدفع: $methodLabel
-• تم ترحيل وتأثير القيد المحاسبي آلياً في دفتر الأستاذ العام.$voucherNum
+• تم ترحيل وتأثير القيد المحاسبي آلياً في دفتر الأستاذ العام.
 ''',
             timestamp: DateTime.now(),
             executedActions: [action],

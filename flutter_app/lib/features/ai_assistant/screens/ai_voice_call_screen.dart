@@ -47,21 +47,13 @@ class _AiVoiceCallScreenState extends State<AiVoiceCallScreen> with TickerProvid
 
   void _startCall() async {
     _startTimer();
-    final ok = await AiVoiceService.initialize();
-    if (!mounted) return;
-
-    if (!ok) {
-      setState(() {
-        _callStatus = 'error';
-        _assistantSpeechText = 'تعذر تشغيل المايكروفون. يرجى التأكد من صلاحيات الصوت.';
-      });
-      return;
-    }
-
     setState(() {
       _callStatus = 'speaking';
       _assistantSpeechText = 'مرحباً بك! أنا مساعدك المحاسبي الذكي. كيف أقدر أساعدك اليوم في حساباتك ومستودعاتك؟';
     });
+
+    await AiVoiceService.initialize();
+    if (!mounted) return;
 
     await AiVoiceService.speak(_assistantSpeechText, onComplete: () {
       if (mounted && !_isMuted) {

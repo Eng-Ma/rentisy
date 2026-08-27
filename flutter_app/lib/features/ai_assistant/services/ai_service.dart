@@ -11,6 +11,98 @@ enum AiProviderType {
 }
 
 class AiService {
+  // Fetch Live Available Models for a provider using user's API Key
+  static Future<List<String>> fetchAvailableModels(AiProviderType provider, String apiKey) async {
+    if (apiKey.trim().isEmpty) {
+      return getDefaultModels(provider);
+    }
+
+    try {
+      if (provider == AiProviderType.groq) {
+        final res = await http.get(
+          Uri.parse('https://api.groq.com/openai/v1/models'),
+          headers: {'Authorization': 'Bearer ${apiKey.trim()}'},
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes));
+          final list = (data['data'] as List?) ?? [];
+          final models = list
+              .map<String>((m) => m['id']?.toString() ?? '')
+              .where((id) => id.isNotEmpty && !id.contains('whisper') && !id.contains('tts'))
+              .toList();
+          models.sort();
+          if (models.isNotEmpty) return models;
+        }
+      } else if (provider == AiProviderType.openai) {
+        final res = await http.get(
+          Uri.parse('https://api.openai.com/v1/models'),
+          headers: {'Authorization': 'Bearer ${apiKey.trim()}'},
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes));
+          final list = (data['data'] as List?) ?? [];
+          final models = list
+              .map<String>((m) => m['id']?.toString() ?? '')
+              .where((id) => id.startsWith('gpt-') || id.startsWith('chatgpt-') || id.startsWith('o1') || id.startsWith('o3'))
+              .toList();
+          models.sort();
+          if (models.isNotEmpty) return models;
+        }
+      } else if (provider == AiProviderType.gemini) {
+        final res = await http.get(
+          Uri.parse('https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey.trim()}'),
+        );
+        if (res.statusCode == 200) {
+          final data = jsonDecode(utf8.decode(res.bodyBytes));
+          final list = (data['models'] as List?) ?? [];
+          final models = list
+              .map<String>((m) {
+                final name = m['name']?.toString() ?? '';
+                return name.replaceFirst('models/', '');
+              })
+              .where((id) => id.contains('gemini'))
+              .toList();
+          models.sort();
+          if (models.isNotEmpty) return models;
+        }
+      }
+    } catch (_) {}
+
+    return getDefaultModels(provider);
+  }
+
+  static List<String> getDefaultModels(AiProviderType provider) {
+    switch (provider) {
+      case AiProviderType.groq:
+        return const [
+          'llama-3.1-8b-instant',
+          'llama-3.1-70b-versatile',
+          'llama3-70b-8192',
+          'llama3-8b-8192',
+          'mixtral-8x7b-32768',
+          'gemma2-9b-it',
+          'deepseek-r1-distill-llama-70b',
+          'qwen-2.5-32b',
+        ];
+      case AiProviderType.openai:
+        return const [
+          'gpt-4o-mini',
+          'gpt-4o',
+          'gpt-4-turbo',
+          'gpt-3.5-turbo',
+          'o1-mini',
+          'o3-mini',
+        ];
+      case AiProviderType.gemini:
+        return const [
+          'gemini-1.5-flash',
+          'gemini-1.5-pro',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash-8b',
+        ];
+    }
+  }
+
   // System Prompt explaining the accounting context and available ERP functions
   static const String systemPrompt = '''
 أنت "مساعد الأصيل الذكي المحاسبي" (Al-Aseel AI Accounting Agent) - وكيل ذكاء اصطناعي خبير في إدارة نظام المحاسبة والمستودعات.

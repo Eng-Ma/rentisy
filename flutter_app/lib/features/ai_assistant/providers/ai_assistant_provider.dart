@@ -14,7 +14,7 @@ class AiAssistantProvider extends ChangeNotifier {
 
   String _openAiModel = 'gpt-4o-mini';
   String _geminiModel = 'gemini-1.5-flash';
-  String _groqModel = 'llama-3.3-70b-versatile';
+  String _groqModel = 'llama-3.1-8b-instant';
 
   List<AiMessage> get messages => _messages;
   bool get isLoading => _isLoading;
@@ -83,7 +83,7 @@ class AiAssistantProvider extends ChangeNotifier {
 
     _openAiModel = prefs.getString('ai_openai_model') ?? 'gpt-4o-mini';
     _geminiModel = prefs.getString('ai_gemini_model') ?? 'gemini-1.5-flash';
-    _groqModel = prefs.getString('ai_groq_model') ?? 'llama-3.3-70b-versatile';
+    _groqModel = prefs.getString('ai_groq_model') ?? 'llama-3.1-8b-instant';
 
     notifyListeners();
   }

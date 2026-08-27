@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/widgets/app_loader.dart';
 import '../../../core/widgets/custom_text_field.dart';
 import '../providers/ai_assistant_provider.dart';
 import '../services/ai_service.dart';
@@ -18,10 +19,15 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
   final _geminiKeyController = TextEditingController();
   final _groqKeyController = TextEditingController();
 
-  final _openAiModelController = TextEditingController();
-  final _geminiModelController = TextEditingController();
-  final _groqModelController = TextEditingController();
+  String _selectedOpenAiModel = 'gpt-4o-mini';
+  String _selectedGeminiModel = 'gemini-1.5-flash';
+  String _selectedGroqModel = 'llama-3.1-8b-instant';
 
+  List<String> _openAiModels = [];
+  List<String> _geminiModels = [];
+  List<String> _groqModels = [];
+
+  bool _isLoadingModels = false;
   bool _obscureKey = true;
 
   @override
@@ -33,9 +39,15 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     _geminiKeyController.text = p.geminiKey;
     _groqKeyController.text = p.groqKey;
 
-    _openAiModelController.text = p.currentModel;
-    _geminiModelController.text = p.geminiKey.isNotEmpty ? p.currentModel : 'gemini-1.5-flash';
-    _groqModelController.text = p.groqKey.isNotEmpty ? p.currentModel : 'llama-3.3-70b-versatile';
+    _selectedOpenAiModel = p.openAiKey.isNotEmpty ? p.currentModel : 'gpt-4o-mini';
+    _selectedGeminiModel = p.geminiKey.isNotEmpty ? p.currentModel : 'gemini-1.5-flash';
+    _selectedGroqModel = p.groqKey.isNotEmpty ? p.currentModel : 'llama-3.1-8b-instant';
+
+    _openAiModels = List.from(AiService.getDefaultModels(AiProviderType.openai));
+    _geminiModels = List.from(AiService.getDefaultModels(AiProviderType.gemini));
+    _groqModels = List.from(AiService.getDefaultModels(AiProviderType.groq));
+
+    _fetchLiveModels();
   }
 
   @override
@@ -43,10 +55,41 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
     _openAiKeyController.dispose();
     _geminiKeyController.dispose();
     _groqKeyController.dispose();
-    _openAiModelController.dispose();
-    _geminiModelController.dispose();
-    _groqModelController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchLiveModels() async {
+    String currentKey = '';
+    if (_provider == AiProviderType.groq) currentKey = _groqKeyController.text;
+    if (_provider == AiProviderType.openai) currentKey = _openAiKeyController.text;
+    if (_provider == AiProviderType.gemini) currentKey = _geminiKeyController.text;
+
+    if (currentKey.trim().isEmpty) return;
+
+    setState(() => _isLoadingModels = true);
+    final models = await AiService.fetchAvailableModels(_provider, currentKey);
+
+    if (mounted) {
+      setState(() {
+        _isLoadingModels = false;
+        if (_provider == AiProviderType.groq) {
+          _groqModels = models;
+          if (!_groqModels.contains(_selectedGroqModel)) {
+            _selectedGroqModel = _groqModels.first;
+          }
+        } else if (_provider == AiProviderType.openai) {
+          _openAiModels = models;
+          if (!_openAiModels.contains(_selectedOpenAiModel)) {
+            _selectedOpenAiModel = _openAiModels.first;
+          }
+        } else if (_provider == AiProviderType.gemini) {
+          _geminiModels = models;
+          if (!_geminiModels.contains(_selectedGeminiModel)) {
+            _selectedGeminiModel = _geminiModels.first;
+          }
+        }
+      });
+    }
   }
 
   Future<void> _handleSave() async {
@@ -54,9 +97,9 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
       openAiKey: _openAiKeyController.text,
       geminiKey: _geminiKeyController.text,
       groqKey: _groqKeyController.text,
-      openAiModel: _openAiModelController.text.isNotEmpty ? _openAiModelController.text : 'gpt-4o-mini',
-      geminiModel: _geminiModelController.text.isNotEmpty ? _geminiModelController.text : 'gemini-1.5-flash',
-      groqModel: _groqModelController.text.isNotEmpty ? _groqModelController.text : 'llama-3.3-70b-versatile',
+      openAiModel: _selectedOpenAiModel,
+      geminiModel: _selectedGeminiModel,
+      groqModel: _selectedGroqModel,
       provider: _provider,
     );
 
@@ -64,7 +107,7 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('تم حفظ مفتاح وإعدادات الذكاء الاصطناعي بنجاح'),
+          content: Text('تم حفظ مفتاح وإعدادات النموذج بنجاح'),
           backgroundColor: AppColors.secondary,
         ),
       );
@@ -80,18 +123,18 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         children: [
           Icon(Icons.auto_awesome, color: AppColors.primary),
           SizedBox(width: 8),
-          Text('إعدادات الذكاء الاصطناعي (AI Keys)'),
+          Text('إعدادات الذكاء الاصطناعي والنماذج المتاحة'),
         ],
       ),
       content: SingleChildScrollView(
         child: SizedBox(
-          width: 460,
+          width: 480,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'اختر مزود الذكاء الاصطناعي المفضل لديك:',
+                'اختر مزود الذكاء الاصطناعي:',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
@@ -102,29 +145,83 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                 runSpacing: 8,
                 children: [
                   ChoiceChip(
+                    avatar: const Icon(Icons.flash_on_rounded, size: 16),
+                    label: const Text('Groq (سريع جداً ومجاني)'),
+                    selected: _provider == AiProviderType.groq,
+                    onSelected: (_) {
+                      setState(() => _provider = AiProviderType.groq);
+                      _fetchLiveModels();
+                    },
+                  ),
+                  ChoiceChip(
                     avatar: const Icon(Icons.bolt_rounded, size: 16),
                     label: const Text('ChatGPT (OpenAI)'),
                     selected: _provider == AiProviderType.openai,
-                    onSelected: (_) => setState(() => _provider = AiProviderType.openai),
+                    onSelected: (_) {
+                      setState(() => _provider = AiProviderType.openai);
+                      _fetchLiveModels();
+                    },
                   ),
                   ChoiceChip(
                     avatar: const Icon(Icons.auto_awesome, size: 16),
                     label: const Text('Google Gemini'),
                     selected: _provider == AiProviderType.gemini,
-                    onSelected: (_) => setState(() => _provider = AiProviderType.gemini),
-                  ),
-                  ChoiceChip(
-                    avatar: const Icon(Icons.flash_on_rounded, size: 16),
-                    label: const Text('Groq (سريع جداً)'),
-                    selected: _provider == AiProviderType.groq,
-                    onSelected: (_) => setState(() => _provider = AiProviderType.groq),
+                    onSelected: (_) {
+                      setState(() => _provider = AiProviderType.gemini);
+                      _fetchLiveModels();
+                    },
                   ),
                 ],
               ),
               const SizedBox(height: 18),
 
-              // Dynamic Fields depending on provider
-              if (_provider == AiProviderType.openai) ...[
+              // Dynamic Input Fields depending on provider
+              if (_provider == AiProviderType.groq) ...[
+                CustomTextField(
+                  controller: _groqKeyController,
+                  label: 'Groq API Key *',
+                  hint: 'gsk_...',
+                  prefixIcon: Icons.key_rounded,
+                  obscureText: _obscureKey,
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility, size: 18),
+                    onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                  ),
+                  onChanged: (_) => _fetchLiveModels(),
+                ),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _groqModels.contains(_selectedGroqModel) ? _selectedGroqModel : _groqModels.first,
+                        decoration: InputDecoration(
+                          labelText: 'النموذج المتاح (Model)',
+                          suffixIcon: _isLoadingModels
+                              ? const Padding(padding: EdgeInsets.all(12), child: AppLoader(size: 14))
+                              : null,
+                        ),
+                        isExpanded: true,
+                        items: _groqModels.map((m) {
+                          return DropdownMenuItem<String>(
+                            value: m,
+                            child: Text(m, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedGroqModel = val);
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      tooltip: 'تحديث النماذج المتاحة من حسابك',
+                      onPressed: _fetchLiveModels,
+                    ),
+                  ],
+                ),
+              ] else if (_provider == AiProviderType.openai) ...[
                 CustomTextField(
                   controller: _openAiKeyController,
                   label: 'OpenAI API Key *',
@@ -135,22 +232,39 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                     icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility, size: 18),
                     onPressed: () => setState(() => _obscureKey = !_obscureKey),
                   ),
+                  onChanged: (_) => _fetchLiveModels(),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: ['gpt-4o-mini', 'gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'].contains(_openAiModelController.text)
-                      ? _openAiModelController.text
-                      : 'gpt-4o-mini',
-                  decoration: const InputDecoration(labelText: 'النموذج (Model)'),
-                  items: const [
-                    DropdownMenuItem(value: 'gpt-4o-mini', child: Text('GPT-4o Mini (سريع واقتصادي)')),
-                    DropdownMenuItem(value: 'gpt-4o', child: Text('GPT-4o (النموذج الأقوى)')),
-                    DropdownMenuItem(value: 'gpt-4-turbo', child: Text('GPT-4 Turbo')),
-                    DropdownMenuItem(value: 'gpt-3.5-turbo', child: Text('GPT-3.5 Turbo')),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _openAiModels.contains(_selectedOpenAiModel) ? _selectedOpenAiModel : _openAiModels.first,
+                        decoration: InputDecoration(
+                          labelText: 'النموذج المتاح (Model)',
+                          suffixIcon: _isLoadingModels
+                              ? const Padding(padding: EdgeInsets.all(12), child: AppLoader(size: 14))
+                              : null,
+                        ),
+                        isExpanded: true,
+                        items: _openAiModels.map((m) {
+                          return DropdownMenuItem<String>(
+                            value: m,
+                            child: Text(m, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedOpenAiModel = val);
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      tooltip: 'تحديث النماذج المتاحة',
+                      onPressed: _fetchLiveModels,
+                    ),
                   ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _openAiModelController.text = val);
-                  },
                 ),
               ] else if (_provider == AiProviderType.gemini) ...[
                 CustomTextField(
@@ -163,48 +277,39 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                     icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility, size: 18),
                     onPressed: () => setState(() => _obscureKey = !_obscureKey),
                   ),
+                  onChanged: (_) => _fetchLiveModels(),
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'].contains(_geminiModelController.text)
-                      ? _geminiModelController.text
-                      : 'gemini-1.5-flash',
-                  decoration: const InputDecoration(labelText: 'النموذج (Model)'),
-                  items: const [
-                    DropdownMenuItem(value: 'gemini-1.5-flash', child: Text('Gemini 1.5 Flash (سريع)')),
-                    DropdownMenuItem(value: 'gemini-1.5-pro', child: Text('Gemini 1.5 Pro (ذكي)')),
-                    DropdownMenuItem(value: 'gemini-2.0-flash', child: Text('Gemini 2.0 Flash')),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _geminiModels.contains(_selectedGeminiModel) ? _selectedGeminiModel : _geminiModels.first,
+                        decoration: InputDecoration(
+                          labelText: 'النموذج المتاح (Model)',
+                          suffixIcon: _isLoadingModels
+                              ? const Padding(padding: EdgeInsets.all(12), child: AppLoader(size: 14))
+                              : null,
+                        ),
+                        isExpanded: true,
+                        items: _geminiModels.map((m) {
+                          return DropdownMenuItem<String>(
+                            value: m,
+                            child: Text(m, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        onChanged: (val) {
+                          if (val != null) setState(() => _selectedGeminiModel = val);
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      tooltip: 'تحديث النماذج المتاحة',
+                      onPressed: _fetchLiveModels,
+                    ),
                   ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _geminiModelController.text = val);
-                  },
-                ),
-              ] else if (_provider == AiProviderType.groq) ...[
-                CustomTextField(
-                  controller: _groqKeyController,
-                  label: 'Groq API Key *',
-                  hint: 'gsk_...',
-                  prefixIcon: Icons.key_rounded,
-                  obscureText: _obscureKey,
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscureKey ? Icons.visibility_off : Icons.visibility, size: 18),
-                    onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'].contains(_groqModelController.text)
-                      ? _groqModelController.text
-                      : 'llama-3.3-70b-versatile',
-                  decoration: const InputDecoration(labelText: 'النموذج (Model)'),
-                  items: const [
-                    DropdownMenuItem(value: 'llama-3.3-70b-versatile', child: Text('Llama 3.3 70B Versatile')),
-                    DropdownMenuItem(value: 'llama-3.1-8b-instant', child: Text('Llama 3.1 8B Instant')),
-                    DropdownMenuItem(value: 'mixtral-8x7b-32768', child: Text('Mixtral 8x7B')),
-                  ],
-                  onChanged: (val) {
-                    if (val != null) setState(() => _groqModelController.text = val);
-                  },
                 ),
               ],
               const SizedBox(height: 16),
@@ -221,7 +326,7 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'يتم حفظ مفاتيح API محلياً على جهازك فقط ولا يتم مشاركتها أبداً.',
+                        'يتم جلب النماذج المتاحة تلقائياً وفقاً لمفتاحك، وحفظ المفاتيح محلياً على جهازك بأمان.',
                         style: TextStyle(fontSize: 11, color: AppColors.primary, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -240,7 +345,7 @@ class _AiSettingsDialogState extends State<AiSettingsDialog> {
         ElevatedButton(
           onPressed: _handleSave,
           style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-          child: const Text('حفظ الإعدادات'),
+          child: const Text('حفظ واختيار النموذج'),
         ),
       ],
     );

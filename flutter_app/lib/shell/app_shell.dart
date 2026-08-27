@@ -31,6 +31,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   final List<_NavSection> _navSections = [
     _NavSection(
@@ -114,6 +115,21 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _selectedIndex = index;
     });
+  }
+
+  int _calculateBottomNavIndex() {
+    switch (_selectedIndex) {
+      case 0:
+        return 0; // الرئيسية
+      case 6:
+        return 1; // الفواتير
+      case 4:
+        return 2; // السندات
+      case 13:
+        return 3; // التقارير
+      default:
+        return 4; // القائمة
+    }
   }
 
   @override
@@ -308,6 +324,7 @@ class _AppShellState extends State<AppShell> {
 
     // Mobile Layout with App Drawer & Bottom Navigation Bar
     return Scaffold(
+      key: _scaffoldKey,
       drawer: Drawer(
         child: Column(
           children: [
@@ -383,13 +400,13 @@ class _AppShellState extends State<AppShell> {
       ),
       body: _navSections[_selectedIndex].builder(),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex > 4 ? 0 : _selectedIndex,
+        selectedIndex: _calculateBottomNavIndex(),
         onDestinationSelected: (idx) {
           if (idx == 4) {
-            // Open Drawer for all modules
-            Scaffold.of(context).openDrawer();
+            _scaffoldKey.currentState?.openDrawer();
           } else {
-            _onSelect(idx);
+            const targetIndices = [0, 6, 4, 13];
+            _onSelect(targetIndices[idx]);
           }
         },
         destinations: const [

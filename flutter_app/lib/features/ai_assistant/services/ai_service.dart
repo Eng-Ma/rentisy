@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../core/api/api_service.dart';
@@ -100,6 +101,204 @@ class AiService {
           'gemini-2.0-flash',
           'gemini-1.5-flash-8b',
         ];
+    }
+  }
+
+  // =========================================================================
+  // --- REAL-TIME STREAMING ENTRYPOINT ---
+  // =========================================================================
+  static Future<void> sendMessageStream({
+    required String prompt,
+    required List<AiMessage> history,
+    required AiProviderType provider,
+    required String apiKey,
+    required String model,
+    required Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
+  }) async {
+    // 1. Direct Deterministic Intent Engine
+    final directResult = await tryExecuteDirectAccountingIntent(prompt);
+    if (directResult != null) {
+      // Simulate real-time streaming effect for instant local execution
+      final fullText = directResult.text;
+      final words = fullText.split(' ');
+      String accumulated = '';
+      for (int i = 0; i < words.length; i++) {
+        accumulated += (i == 0 ? '' : ' ') + words[i];
+        final isLast = i == words.length - 1;
+        onChunk(
+          words[i] + (isLast ? '' : ' '),
+          actions: isLast ? directResult.executedActions : null,
+          isDone: isLast,
+        );
+        await Future.delayed(const Duration(milliseconds: 20));
+      }
+      return;
+    }
+
+    // 2. Check API Key
+    if (apiKey.trim().isEmpty) {
+      onChunk('الرجاء إدخال مفتاح API الخاص بك أولاً بالضغط على أيقونة الإعدادات ⚙️ أعلى الشاشة.', isDone: true);
+      return;
+    }
+
+    // 3. Stream from LLM Provider
+    try {
+      if (provider == AiProviderType.gemini) {
+        await _streamGemini(prompt, history, apiKey, model, onChunk);
+      } else {
+        final baseUrl = provider == AiProviderType.groq
+            ? 'https://api.groq.com/openai/v1/chat/completions'
+            : 'https://api.openai.com/v1/chat/completions';
+        await _streamOpenAiCompatible(prompt, history, apiKey, model, baseUrl, onChunk);
+      }
+    } catch (e) {
+      onChunk('\n\nحدث خطأ أثناء البث المباشر:\n$e', isDone: true);
+    }
+  }
+
+  // --- OPENAI & GROQ REAL-TIME STREAMING ---
+  static Future<void> _streamOpenAiCompatible(
+    String prompt,
+    List<AiMessage> history,
+    String apiKey,
+    String model,
+    String endpointUrl,
+    Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
+  ) async {
+    final client = http.Client();
+    try {
+      final activeModel = model.isNotEmpty
+          ? model
+          : (endpointUrl.contains('groq') ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
+
+      final messages = [
+        {
+          'role': 'system',
+          'content': 'أنت محاسب مالي ذكي وخبير في النظام. أجب باختصار شديد واحترافية وبالأرقام المالية المباشرة دون إطالة.'
+        },
+        ...history.where((m) => !m.isLoading).map((m) {
+          return {
+            'role': m.sender == MessageSender.user ? 'user' : 'assistant',
+            'content': m.text,
+          };
+        }),
+        {'role': 'user', 'content': prompt},
+      ];
+
+      final request = http.Request('POST', Uri.parse(endpointUrl))
+        ..headers.addAll({
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $apiKey',
+          'Accept': 'text/event-stream',
+        })
+        ..body = jsonEncode({
+          'model': activeModel,
+          'messages': messages,
+          'temperature': 0.3,
+          'stream': true,
+        });
+
+      final response = await client.send(request);
+
+      if (response.statusCode != 200) {
+        final bytes = await response.stream.toBytes();
+        final err = utf8.decode(bytes);
+        throw Exception(err);
+      }
+
+      await for (final line in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        if (trimmed == 'data: [DONE]') {
+          onChunk('', isDone: true);
+          break;
+        }
+
+        if (trimmed.startsWith('data: ')) {
+          final jsonStr = trimmed.substring(6).trim();
+          try {
+            final data = jsonDecode(jsonStr);
+            final delta = data['choices']?[0]?['delta']?['content']?.toString() ?? '';
+            if (delta.isNotEmpty) {
+              onChunk(delta, isDone: false);
+            }
+          } catch (_) {}
+        }
+      }
+      onChunk('', isDone: true);
+    } finally {
+      client.close();
+    }
+  }
+
+  // --- GOOGLE GEMINI REAL-TIME STREAMING ---
+  static Future<void> _streamGemini(
+    String prompt,
+    List<AiMessage> history,
+    String apiKey,
+    String model,
+    Function(String chunk, {List<AiToolAction>? actions, bool isDone}) onChunk,
+  ) async {
+    final client = http.Client();
+    try {
+      final geminiModel = model.isNotEmpty ? model : 'gemini-1.5-flash';
+      final url = 'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:streamGenerateContent?alt=sse&key=$apiKey';
+
+      final contents = [
+        ...history.where((m) => !m.isLoading).map((m) {
+          return {
+            'role': m.sender == MessageSender.user ? 'user' : 'model',
+            'parts': [{'text': m.text}],
+          };
+        }),
+        {
+          'role': 'user',
+          'parts': [{'text': 'أنت محاسب مالي ذكي وخبير. أجب باختصار شديد ومباشر:\n$prompt'}],
+        }
+      ];
+
+      final request = http.Request('POST', Uri.parse(url))
+        ..headers.addAll({
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        })
+        ..body = jsonEncode({
+          'contents': contents,
+          'generationConfig': {'temperature': 0.3},
+        });
+
+      final response = await client.send(request);
+
+      if (response.statusCode != 200) {
+        final bytes = await response.stream.toBytes();
+        final err = utf8.decode(bytes);
+        throw Exception(err);
+      }
+
+      await for (final line in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        if (trimmed.startsWith('data: ')) {
+          final jsonStr = trimmed.substring(6).trim();
+          try {
+            final data = jsonDecode(jsonStr);
+            final candidates = data['candidates'] as List?;
+            if (candidates != null && candidates.isNotEmpty) {
+              final parts = candidates[0]?['content']?['parts'] as List?;
+              if (parts != null && parts.isNotEmpty) {
+                final delta = parts[0]?['text']?.toString() ?? '';
+                if (delta.isNotEmpty) {
+                  onChunk(delta, isDone: false);
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+      onChunk('', isDone: true);
+    } finally {
+      client.close();
     }
   }
 
@@ -255,7 +454,6 @@ class AiService {
     // -------------------------------------------------------------
     if ((p.contains('فاتورة') || p.contains('فاتوره')) && (p.contains('أنشئ') || p.contains('انشئ') || p.contains('أضف') || p.contains('سجل') || p.contains('جديدة'))) {
       final isPurchase = p.contains('شراء') || p.contains('مشتريات');
-      final amount = extractAmount() ?? 100.0;
       final type = isPurchase ? 'purchase' : 'sale';
 
       final action = await executeTool('create_invoice', {
@@ -666,155 +864,5 @@ class AiService {
     } catch (e) {
       return AiToolAction(toolName: toolName, arguments: args, result: 'Error: $e', isSuccess: false);
     }
-  }
-
-  // ==========================================
-  // --- SEND MESSAGE (MAIN ENTRYPOINT) ---
-  // ==========================================
-  static Future<AiMessage> sendMessage({
-    required String prompt,
-    required List<AiMessage> history,
-    required AiProviderType provider,
-    required String apiKey,
-    required String model,
-  }) async {
-    // Step 1: Execute Direct Accounting Intent (Instant & 100% Reliable)
-    final directResult = await tryExecuteDirectAccountingIntent(prompt);
-    if (directResult != null) {
-      return directResult;
-    }
-
-    // Step 2: If conversational question, check API Key
-    if (apiKey.trim().isEmpty) {
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        sender: MessageSender.assistant,
-        text: 'الرجاء إدخال مفتاح API الخاص بك أولاً بالضغط على أيقونة الإعدادات ⚙️ أعلى الشاشة.',
-        timestamp: DateTime.now(),
-      );
-    }
-
-    // Step 3: Forward to LLM (ChatGPT / Gemini / Groq)
-    try {
-      if (provider == AiProviderType.gemini) {
-        return await _sendGemini(prompt, history, apiKey, model);
-      } else {
-        final baseUrl = provider == AiProviderType.groq
-            ? 'https://api.groq.com/openai/v1/chat/completions'
-            : 'https://api.openai.com/v1/chat/completions';
-
-        return await _sendOpenAiCompatible(prompt, history, apiKey, model, baseUrl);
-      }
-    } catch (e) {
-      return AiMessage(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        sender: MessageSender.assistant,
-        text: 'حدث خطأ أثناء الاتصال بالنموذج:\n$e',
-        timestamp: DateTime.now(),
-      );
-    }
-  }
-
-  // --- OPENAI & GROQ IMPLEMENTATION ---
-  static Future<AiMessage> _sendOpenAiCompatible(
-    String prompt,
-    List<AiMessage> history,
-    String apiKey,
-    String model,
-    String endpointUrl,
-  ) async {
-    final messages = [
-      {
-        'role': 'system',
-        'content': 'أنت محاسب مالي ذكي وخبير في النظام. أجب باختصار شديد واحترافية وبالأرقام المالية المباشرة دون إطالة.'
-      },
-      ...history.where((m) => !m.isLoading).map((m) {
-        return {
-          'role': m.sender == MessageSender.user ? 'user' : 'assistant',
-          'content': m.text,
-        };
-      }),
-      {'role': 'user', 'content': prompt},
-    ];
-
-    final activeModel = model.isNotEmpty
-        ? model
-        : (endpointUrl.contains('groq') ? 'llama-3.1-8b-instant' : 'gpt-4o-mini');
-
-    final response = await http.post(
-      Uri.parse(endpointUrl),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $apiKey',
-      },
-      body: jsonEncode({
-        'model': activeModel,
-        'messages': messages,
-        'temperature': 0.3,
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      final errorJson = jsonDecode(utf8.decode(response.bodyBytes));
-      throw Exception(errorJson['error']?['message'] ?? 'Status code: ${response.statusCode}');
-    }
-
-    final data = jsonDecode(utf8.decode(response.bodyBytes));
-    final text = data['choices']?[0]?['message']?['content'] ?? '';
-
-    return AiMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      sender: MessageSender.assistant,
-      text: text,
-      timestamp: DateTime.now(),
-    );
-  }
-
-  // --- GOOGLE GEMINI IMPLEMENTATION ---
-  static Future<AiMessage> _sendGemini(
-    String prompt,
-    List<AiMessage> history,
-    String apiKey,
-    String model,
-  ) async {
-    final geminiModel = model.isNotEmpty ? model : 'gemini-1.5-flash';
-    final url = 'https://generativelanguage.googleapis.com/v1beta/models/$geminiModel:generateContent?key=$apiKey';
-
-    final contents = [
-      ...history.where((m) => !m.isLoading).map((m) {
-        return {
-          'role': m.sender == MessageSender.user ? 'user' : 'model',
-          'parts': [{'text': m.text}],
-        };
-      }),
-      {
-        'role': 'user',
-        'parts': [{'text': 'أنت محاسب مالي ذكي. أجب باختصار شديد وبالأرقام:\n$prompt'}],
-      }
-    ];
-
-    final response = await http.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'contents': contents,
-        'generationConfig': {'temperature': 0.3},
-      }),
-    );
-
-    if (response.statusCode != 200) {
-      final err = jsonDecode(utf8.decode(response.bodyBytes));
-      throw Exception(err['error']?['message'] ?? 'Gemini status ${response.statusCode}');
-    }
-
-    final data = jsonDecode(utf8.decode(response.bodyBytes));
-    final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
-
-    return AiMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      sender: MessageSender.assistant,
-      text: text,
-      timestamp: DateTime.now(),
-    );
   }
 }

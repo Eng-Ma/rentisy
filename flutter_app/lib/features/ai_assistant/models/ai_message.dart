@@ -28,6 +28,7 @@ class AiMessage {
   final DateTime timestamp;
   final List<AiToolAction>? executedActions;
   final bool isLoading;
+  final bool isStreaming;
 
   AiMessage({
     required this.id,
@@ -36,12 +37,14 @@ class AiMessage {
     required this.timestamp,
     this.executedActions,
     this.isLoading = false,
+    this.isStreaming = false,
   });
 
   AiMessage copyWith({
     String? text,
     List<AiToolAction>? executedActions,
     bool? isLoading,
+    bool? isStreaming,
   }) {
     return AiMessage(
       id: id,
@@ -50,6 +53,7 @@ class AiMessage {
       timestamp: timestamp,
       executedActions: executedActions ?? this.executedActions,
       isLoading: isLoading ?? this.isLoading,
+      isStreaming: isStreaming ?? this.isStreaming,
     );
   }
 }

@@ -22,6 +22,7 @@
 ## AI Assistant & Live Voice Call
 - **Live Voice Call Mode (`AiVoiceCallScreen`)**: Real-time conversational voice call with glowing pulsing audio visualizer (ChatGPT/Gemini Live style). Speaks Arabic TTS and transcribes Arabic voice commands.
 - **Microphone Input (`AiVoiceService`)**: Tap-to-speak voice transcription directly in chat bar.
+- **Fast-Path Chit-Chat & Greeting Classifier**: Instantly detects casual conversation (greetings, thank-yous, status checks, who-are-you) and returns zero-latency responses without making unnecessary database queries.
 - **Natural Dialect Intent Engine**: Understands conversational Arabic dialects (`اعملي`, `سويلي`, `حط`, `ضيف`, `سجل`, `بدي`, `احذفه`, `خليها 1000`).
 - **Contextual Deletion & Updates**: Resolves targets by context (latest created entity), explicit ID, voucher number, or amount.
 - **Zero-Hallucination Guarantee**: All accounting actions are executed against real backend endpoints; failures return concise, token-efficient error summaries instead of stack traces.

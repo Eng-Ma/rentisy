@@ -478,34 +478,60 @@ class AiService {
     }
 
     // -------------------------------------------------------------
-    // -1. FAST-PATH CONVERSATIONAL CHIT-CHAT & GREETINGS (كلام عادي / ترحيب / شكر)
+    // -1. FAST-PATH CONVERSATIONAL CHIT-CHAT & GREETINGS (كلام عادي / ترحيب / شكر - استجابة فورية 0ms)
     // -------------------------------------------------------------
-    final cleanP = p.replaceAll(RegExp(r'[^\u0621-\u064A\sa-zA-Z0-9]'), '').trim();
+    final cleanP = p.replaceAll(RegExp(r'[^\u0621-\u064A\sa-zA-Z0-9]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
 
-    // Wake Word / Calling Assistant Name ("غباء")
-    if (RegExp(r'^(يا غباء|غباء|يا غبي|غبي|يا ذكي|يا رينتيسي|يا محاسب)$').hasMatch(cleanP)) {
-      return _msg('هلا وغلا يا باشمهندس محمود! معك **غباء** عيوني لك ومستمع لكل أوامرك 😂. شو حابب نسوي في الحسابات، السندات، أو المستودع اليوم؟ ✨', []);
-    }
+    // Check if prompt is purely conversational and NOT an accounting command
+    final hasAccountingDomain = p.contains('سند') || p.contains('فاتور') || p.contains('عميل') ||
+                                p.contains('مورد') || p.contains('صنف') || p.contains('شيك') ||
+                                p.contains('حساب') || p.contains('قيد') || p.contains('أصل') ||
+                                p.contains('اصل') || p.contains('مركز تكلفة') || p.contains('مناقل') ||
+                                p.contains('مستودع') || p.contains('مخزون') || p.contains('أرباح') ||
+                                p.contains('ارباح') || p.contains('مبيعات') || p.contains('مشتريات') ||
+                                p.contains('ديون') || p.contains('جدول') || upper.startsWith('SELECT') ||
+                                upper.startsWith('SHOW') || upper.startsWith('UPDATE') || upper.startsWith('INSERT') ||
+                                upper.startsWith('DELETE FROM') || (extractAmount() != null && extractAmount()! > 0);
 
-    // Pure Greetings
-    if (RegExp(r'^(مرحبا|مرحباً|هلا|اهلين|أهلين|أهلا|أهلاً|السلام عليكم|سلام عليكم|صباح الخير|مساء الخير|هاي|hello|hi)$').hasMatch(cleanP)) {
-      return _msg('أهلاً وسهلاً بك يا باشمهندس محمود! معك المساعد غباء 👋 كيف أقدر أساعدك اليوم في إدارة حساباتك، سنداتك، أو مستودعاتك؟', []);
-    }
+    if (!hasAccountingDomain) {
+      // 1. Calling Assistant Name ("غباء" / "يا غباء")
+      if (cleanP.contains('غباء') || cleanP.contains('غبي') || cleanP.contains('يا ذكي') || cleanP == 'غباء' || cleanP.startsWith('يا غباء')) {
+        return _msg('هلا وغلا يا باشمهندس محمود! معك **غباء** عيوني لك ومستمع لكل أوامرك 😂. شو حابب نسوي في الحسابات، السندات، أو المستودع اليوم؟ ✨', []);
+      }
 
-    // Status / How are you
-    if (RegExp(r'^(كيفك|كيف حالك|شخبارك|شو اخبارك|شو أخبارك|شلونك|عساك بخير|كيف الامور|تمام|تمام الحمد لله)$').hasMatch(cleanP)) {
-      return _msg('الحمد لله بأفضل حال وجاهز لخدمتك يا باشمهندس محمود! ⚡ اطلب مني أي عملية مالية أو استعلام وأنا في الخدمة.', []);
-    }
+      // 2. How are you / Status / Well-being ("كيف حالك", "انت كويس", "شخبارك", "كيفك", "عامل ايه")
+      if (cleanP.contains('كيفك') || cleanP.contains('كيف حالك') || cleanP.contains('شخبارك') ||
+          cleanP.contains('شو اخبارك') || cleanP.contains('شو أخبارك') || cleanP.contains('شلونك') ||
+          cleanP.contains('عساك بخير') || cleanP.contains('كويس') || cleanP.contains('كيف الامور') ||
+          cleanP.contains('عامل ايه') || cleanP.contains('اخبارك') || cleanP.contains('أخبارك') ||
+          cleanP.contains('كيف صحتك') || cleanP.contains('كيف الصحة')) {
+        return _msg('الحمد لله بأفضل حال وجاهز لخدمتك يا باشمهندس محمود! ⚡ اطلب مني أي عملية مالية أو استعلام وأنا في الخدمة.', []);
+      }
 
-    // Gratitude / Compliments
-    if (RegExp(r'^(شكرا|شكراً|مشكور|تسلم|يسلمو|يعطيك العافية|الله يعطيك العافية|كفو|ممتاز|رائع|عاشت ايدك|تسلم ايدك|بارك الله فيك)$').hasMatch(cleanP)) {
-      return _msg('العفو ودائماً في خدمتك يا باشمهندس محمود! ✨ هل تحب نعمل أي عملية أخرى؟', []);
-    }
+      // 3. Greetings & Salutations ("مرحبا", "هلا", "السلام عليكم", "صباح الخير", "مساء الخير", "هاي")
+      if (cleanP.contains('مرحبا') || cleanP.contains('مرحباً') || cleanP.contains('هلا') ||
+          cleanP.contains('اهلين') || cleanP.contains('أهلين') || cleanP.contains('أهلا') ||
+          cleanP.contains('أهلاً') || cleanP.contains('السلام عليكم') || cleanP.contains('سلام عليكم') ||
+          cleanP.contains('صباح الخير') || cleanP.contains('مساء الخير') || cleanP.contains('هاي') ||
+          cleanP.contains('hello') || cleanP.contains('hi') || cleanP.contains('تحياتي')) {
+        return _msg('أهلاً وسهلاً بك يا باشمهندس محمود! معك المساعد غباء 👋 كيف أقدر أساعدك اليوم في إدارة حساباتك، سنداتك، أو مستودعاتك؟', []);
+      }
 
-    // Identity / Capabilities
-    if (RegExp(r'^(مين انت|من أنت|شو بتعمل|ايش تسوي|شو وظيفتك|شو بتعرف تسوي|شو قدراتك|عرفني عليك|من انت|شو اسمك|ايش اسمك)$').hasMatch(cleanP) ||
-        p == 'من أنت؟' || p == 'مين انت؟' || p == 'شو بتعرف تعمل؟' || p == 'شو اسمك؟') {
-      return _msg('''
+      // 4. Gratitude & Compliments ("شكرا", "تسلم", "يعطيك العافية", "كفو", "ممتاز", "يسلمو")
+      if (cleanP.contains('شكرا') || cleanP.contains('شكراً') || cleanP.contains('مشكور') ||
+          cleanP.contains('تسلم') || cleanP.contains('يسلمو') || cleanP.contains('يعطيك العافية') ||
+          cleanP.contains('الله يعطيك') || cleanP.contains('كفو') || cleanP.contains('ممتاز') ||
+          cleanP.contains('رائع') || cleanP.contains('عاشت ايدك') || cleanP.contains('تسلم ايدك') ||
+          cleanP.contains('بارك الله') || cleanP.contains('حبيبي')) {
+        return _msg('العفو ودائماً في خدمتك يا باشمهندس محمود! ✨ هل تحب نعمل أي عملية أخرى؟', []);
+      }
+
+      // 5. Identity & Capabilities ("مين انت", "شو بتعمل", "شو بتعرف تسوي", "شو اسمك")
+      if (cleanP.contains('مين انت') || cleanP.contains('من أنت') || cleanP.contains('شو بتعمل') ||
+          cleanP.contains('ايش تسوي') || cleanP.contains('شو وظيفتك') || cleanP.contains('شو بتعرف') ||
+          cleanP.contains('شو قدراتك') || cleanP.contains('عرفني عليك') || cleanP.contains('من انت') ||
+          cleanP.contains('شو اسمك') || cleanP.contains('ايش اسمك')) {
+        return _msg('''
 أنا **« غباء (Ghabaa AI) »** — مساعدك ومستشارك المحاسبي المخصص لك يا باشمهندس محمود 🤖💼.
 
 أنا جاهز ومستمع لك بالصوت والكتابة لتنفيذ:
@@ -517,11 +543,15 @@ class AiService {
 
 تقدر تناديني في أي وقت بـ **"يا غباء"** أو **"غباء"** وسأنفذ كل أوامرك فوراً!
 ''', []);
-    }
+      }
 
-    // Casual acknowledgements (e.g. "أوك", "طيب", "تمام")
-    if (RegExp(r'^(اوك|أوك|اوكي|أوكي|طيب|حلو|ماشي|تمام يا غالي|اوك شكرا)$').hasMatch(cleanP)) {
-      return _msg('تحت أمرك في أي وقت يا باشمهندس محمود! جاهز لأي أمر محاسبي جديد. 👍', []);
+      // 6. Casual Acknowledgements ("أوك", "طيب", "تمام", "حلو", "ماشي")
+      if (cleanP.contains('اوك') || cleanP.contains('أوك') || cleanP.contains('اوكي') ||
+          cleanP.contains('أوكي') || cleanP.contains('طيب') || cleanP.contains('حلو') ||
+          cleanP.contains('ماشي') || cleanP.contains('تمام') || cleanP.contains('لا خلاص') ||
+          cleanP.contains('سلام') || cleanP.contains('باي') || cleanP.contains('مع السلامة')) {
+        return _msg('تحت أمرك في أي وقت يا باشمهندس محمود! جاهز لأي أمر محاسبي جديد. 👍', []);
+      }
     }
 
     // -------------------------------------------------------------

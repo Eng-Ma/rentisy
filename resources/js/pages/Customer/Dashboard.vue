@@ -12,7 +12,8 @@ import {
     ShieldCheck,
     Sparkles,
     CreditCard,
-    ExternalLink
+    ExternalLink,
+    Coins
 } from 'lucide-vue-next';
 
 interface Order {
@@ -153,18 +154,32 @@ const getStatusLabel = (status: string) => {
             </div>
 
             <!-- Quick Navigation Modules -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                 <Link
                     :href="route('customer.orders')"
                     class="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 shadow-sm hover:shadow-lg transition-all flex items-center justify-between group"
                 >
                     <div class="space-y-1 text-right">
-                        <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
                             طلباتي ومشترياتي
                         </h3>
-                        <p class="text-xs text-slate-500">تتبع مسار شحناتك واستعرض فواتيرك</p>
+                        <p class="text-xs text-slate-500">تتبع مسار شحناتك وفواتيرك</p>
                     </div>
-                    <ArrowLeft class="w-5 h-5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-1 transition-all" />
+                    <ArrowLeft class="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-1 transition-all" />
+                </Link>
+
+                <Link
+                    :href="route('customer.rewards')"
+                    class="p-6 rounded-3xl bg-gradient-to-br from-amber-50 to-amber-100/40 dark:from-amber-950/30 dark:to-slate-900 border border-amber-200 dark:border-amber-900/60 hover:border-amber-500 shadow-sm hover:shadow-lg transition-all flex items-center justify-between group"
+                >
+                    <div class="space-y-1 text-right">
+                        <h3 class="text-sm font-bold text-amber-900 dark:text-amber-300 group-hover:text-amber-600 transition-colors flex items-center gap-1.5">
+                            <Coins class="w-4 h-4 text-amber-500" />
+                            نقاط الولاء والكاش باك
+                        </h3>
+                        <p class="text-xs text-amber-700/80 dark:text-amber-400/70">رصيدك ومكافآت الترقية</p>
+                    </div>
+                    <ArrowLeft class="w-4 h-4 text-amber-600 group-hover:-translate-x-1 transition-all" />
                 </Link>
 
                 <Link
@@ -172,12 +187,12 @@ const getStatusLabel = (status: string) => {
                     class="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 shadow-sm hover:shadow-lg transition-all flex items-center justify-between group"
                 >
                     <div class="space-y-1 text-right">
-                        <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
                             كشف حسابي المحاسبي (ERP)
                         </h3>
-                        <p class="text-xs text-slate-500">عرض رصيدك وسنداتك وقيودك المالية</p>
+                        <p class="text-xs text-slate-500">عرض رصيدك وسنداتك المالية</p>
                     </div>
-                    <ArrowLeft class="w-5 h-5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-1 transition-all" />
+                    <ArrowLeft class="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-1 transition-all" />
                 </Link>
 
                 <Link
@@ -185,12 +200,12 @@ const getStatusLabel = (status: string) => {
                     class="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 shadow-sm hover:shadow-lg transition-all flex items-center justify-between group"
                 >
                     <div class="space-y-1 text-right">
-                        <h3 class="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
-                            ربط حسابات Google و Facebook
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                            الملف الشخصي والربط
                         </h3>
                         <p class="text-xs text-slate-500">إدارة الأمان والربط الاجتماعي</p>
                     </div>
-                    <ArrowLeft class="w-5 h-5 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-1 transition-all" />
+                    <ArrowLeft class="w-4 h-4 text-slate-400 group-hover:text-emerald-600 group-hover:-translate-x-1 transition-all" />
                 </Link>
             </div>
 

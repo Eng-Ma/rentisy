@@ -1,5 +1,20 @@
 # Rentisy E-Commerce Storefront & Customer Portal Architecture
 
+## Standout & Unique Features (ميزات تنافسية واستثنائية)
+1. **AI Shopping & Tech Advisor (مستشار المشتريات والتقنية الذكي)**:
+   - Floating interactive AI widget that dynamically matches user needs, budget range (slider), and use-case presets (Accounting, Design, Noise-Cancelling, Mobile).
+   - Generates natural Arabic advice reasons and live stock availability from ERP.
+2. **Instant Official ERP Price Quotations (عروض أسعار رسمية فورية بضغطة زر)**:
+   - 1-click generation of stamped formal Price Quotations (`Quotation` & `QuotationLine` in ERP) from Cart or single product.
+   - Print & PDF layout with company registration, VAT, 15-day validity guarantee, and digital verification seal.
+3. **Rentisy Rewards & Cashback Wallet (محفظة نقاط الولاء والكاش باك)**:
+   - Real cashback points earned on every purchase (1 point per 10 ₪ spent).
+   - 4 VIP Tiers: Bronze 🥉, Silver 🥈, Gold 🥇, Diamond VIP 💎 with increasing cashback percentage (1% to 5%).
+   - Redeem points as instant monetary discounts directly at checkout (10 points = 1 ₪).
+   - "Share & Earn" Viral Referral Program with personal referral links and WhatsApp/Facebook 1-click sharing.
+4. **Live Social Proof Stream (إشعارات الشراء المباشرة)**:
+   - Subtle floating toasts showing real-time anonymized purchases from various Palestinian cities (غزة، رام الله، الخليل، نابلس، بيت لحم، جنين).
+
 ## Overview
 The E-commerce Storefront is a full-featured customer-facing online store integrated directly into the Rentisy Accounting ERP system.
 

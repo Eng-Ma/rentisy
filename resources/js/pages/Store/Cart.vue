@@ -10,7 +10,9 @@ import {
     ShieldCheck,
     Truck,
     Tag,
-    ShoppingBag
+    ShoppingBag,
+    FileText,
+    Coins
 } from 'lucide-vue-next';
 
 interface CartItem {
@@ -236,7 +238,26 @@ const applyCoupon = () => {
                             <ArrowLeft class="w-4 h-4" />
                         </Link>
 
-                        <div class="pt-3 text-center">
+                        <!-- Instant Official Price Quotation Button -->
+                        <Link
+                            :href="route('store.quotation.cart')"
+                            method="post"
+                            as="button"
+                            class="w-full py-3 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 transition"
+                        >
+                            <FileText class="w-4 h-4 text-indigo-500" />
+                            <span>استخراج عرض سعر رسمي معتمد (PDF)</span>
+                        </Link>
+
+                        <!-- Cashback Reward Incentive Badge -->
+                        <div class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-xl text-center">
+                            <span class="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center justify-center gap-1.5">
+                                <Coins class="w-4 h-4 text-amber-500" />
+                                ستحصل على {{ Math.floor((summary.total - couponDiscount) / 10) }} نقطة كاش باك عند الشراء!
+                            </span>
+                        </div>
+
+                        <div class="pt-2 text-center">
                             <Link :href="route('store.shop')" class="text-xs text-slate-500 hover:text-emerald-600 font-medium">
                                 ← متابعة التسوق وإضافة منتجات أخرى
                             </Link>

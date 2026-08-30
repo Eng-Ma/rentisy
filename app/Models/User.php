@@ -29,6 +29,9 @@ class User extends Authenticatable
         'facebook_id',
         'avatar',
         'party_id',
+        'points_balance',
+        'referral_code',
+        'tier',
     ];
 
     /**
@@ -77,5 +80,10 @@ class User extends Authenticatable
     public function wishlistItems()
     {
         return $this->hasMany(WishlistItem::class);
+    }
+
+    public function loyaltyTransactions()
+    {
+        return $this->hasMany(LoyaltyTransaction::class)->latest();
     }
 }

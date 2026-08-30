@@ -21,8 +21,11 @@ import {
     ArrowRight,
     Trash2,
     Store as StoreIcon,
-    ExternalLink
+    ExternalLink,
+    Coins
 } from 'lucide-vue-next';
+import AiShoppingAdvisor from '@/components/Store/AiShoppingAdvisor.vue';
+import LivePurchaseNotifications from '@/components/Store/LivePurchaseNotifications.vue';
 
 interface Props {
     title?: string;
@@ -211,6 +214,14 @@ const logout = () => {
                                     >
                                         <PackageCheck class="w-4 h-4 text-slate-400" />
                                         طلباتي ومشترياتي
+                                    </Link>
+
+                                    <Link
+                                        :href="route('customer.rewards')"
+                                        class="flex items-center gap-2.5 px-4 py-2.5 text-xs text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-semibold transition-colors"
+                                    >
+                                        <Coins class="w-4 h-4 text-amber-500" />
+                                        محفظة نقاط الكاش باك
                                     </Link>
 
                                     <Link
@@ -561,5 +572,11 @@ const logout = () => {
                 <span>{{ authUser ? 'حسابي' : 'دخول' }}</span>
             </Link>
         </div>
+
+        <!-- Floating AI Shopping Advisor -->
+        <AiShoppingAdvisor />
+
+        <!-- Live Social Proof Notification Ticker -->
+        <LivePurchaseNotifications />
     </div>
 </template>

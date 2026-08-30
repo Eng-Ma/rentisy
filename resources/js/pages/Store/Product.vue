@@ -14,7 +14,9 @@ import {
     Zap,
     Share2,
     ArrowRight,
-    Package
+    Package,
+    FileText,
+    Coins
 } from 'lucide-vue-next';
 
 interface Item {
@@ -212,6 +214,26 @@ const isWishlisted = () => {
                             <Zap class="w-4 h-4 text-amber-400" />
                             <span>شراء فوري وإتمام الطلب</span>
                         </button>
+
+                        <!-- Instant Quotation PDF -->
+                        <Link
+                            :href="route('store.quotation.product', item.id)"
+                            :data="{ quantity }"
+                            method="post"
+                            as="button"
+                            class="w-full py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-2 transition"
+                        >
+                            <FileText class="w-4 h-4 text-indigo-500" />
+                            <span>طلب عرض سعر رسمي معتمد (PDF) لهذا المنتج</span>
+                        </Link>
+
+                        <!-- Cashback Reward Incentive Badge -->
+                        <div class="p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-xl text-center">
+                            <span class="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center justify-center gap-1.5">
+                                <Coins class="w-4 h-4 text-amber-500" />
+                                ستحصل على {{ Math.floor(item.effective_price / 10) * quantity }} نقطة كاش باك عند شراء هذا المنتج!
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Trust checklist -->

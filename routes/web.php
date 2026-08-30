@@ -26,6 +26,9 @@ use App\Http\Controllers\WishlistController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\CustomerDashboardController;
 use App\Http\Controllers\Auth\SocialAuthController;
+use App\Http\Controllers\StoreAiAdvisorController;
+use App\Http\Controllers\StoreQuotationController;
+use App\Http\Controllers\LoyaltyController;
 
 // --- E-Commerce Public Storefront ---
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
@@ -34,6 +37,14 @@ Route::get('/shop/product/{id}', [StorefrontController::class, 'product'])->name
 Route::get('/shop/category/{id}', function ($id) {
     return redirect()->route('store.shop', ['category_id' => $id]);
 })->name('store.category');
+
+// --- AI Shopping Advisor (مستشار المشتريات الذكي) ---
+Route::get('/api/store/ai-advisor/recommend', [StoreAiAdvisorController::class, 'recommend'])->name('store.ai_advisor');
+
+// --- Instant Official ERP Price Quotations (عروض الأسعار الرسمية الفورية) ---
+Route::post('/store/quotation/cart', [StoreQuotationController::class, 'generateFromCart'])->name('store.quotation.cart');
+Route::post('/store/quotation/product/{id}', [StoreQuotationController::class, 'generateFromProduct'])->name('store.quotation.product');
+Route::get('/store/quotation/{id}', [StoreQuotationController::class, 'show'])->name('store.quotation.show');
 
 // --- Shopping Cart ---
 Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
@@ -61,6 +72,7 @@ Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(functi
     Route::get('/dashboard', [CustomerDashboardController::class, 'index'])->name('dashboard');
     Route::get('/orders', [CustomerDashboardController::class, 'orders'])->name('orders');
     Route::get('/orders/{id}', [CustomerDashboardController::class, 'orderShow'])->name('orders.show');
+    Route::get('/rewards', [LoyaltyController::class, 'index'])->name('rewards');
     Route::get('/profile', [CustomerDashboardController::class, 'profile'])->name('profile');
     Route::post('/profile/update', [CustomerDashboardController::class, 'updateProfile'])->name('profile.update');
     Route::post('/profile/password', [CustomerDashboardController::class, 'updatePassword'])->name('password.update');

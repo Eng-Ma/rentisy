@@ -126,14 +126,32 @@ class CheckoutController extends Controller
                 );
             }
 
-            // 3. Calculate order sums
+            // 3. Calculate order sums & Loyalty Points Discount
             $subtotal = 0;
             foreach ($cartItems as $ci) {
                 $price = $ci->item ? $ci->item->effective_price : 0;
                 $subtotal += $price * $ci->quantity;
             }
             $shippingFee = $subtotal > 200 ? 0 : 20;
-            $totalAmount = $subtotal + $shippingFee;
+
+            // Loyalty Points Redemption
+            $pointsToRedeem = 0;
+            $cashbackDiscount = 0;
+            if ($user && $request->filled('redeem_points') && $request->boolean('redeem_points')) {
+                $availablePoints = (int)($user->points_balance ?? 0);
+                // Can redeem up to 50% of subtotal (10 points = 1 ILS)
+                $maxRedeemableILS = $subtotal * 0.5;
+                $maxRedeemablePoints = (int)($maxRedeemableILS * 10);
+                $pointsToRedeem = min($availablePoints, $maxRedeemablePoints);
+                if ($pointsToRedeem > 0) {
+                    $cashbackDiscount = round($pointsToRedeem / 10, 2);
+                }
+            }
+
+            $totalAmount = max(0, $subtotal + $shippingFee - $cashbackDiscount);
+
+            // Calculate new points earned on this purchase (1 point per 10 ILS spent)
+            $pointsEarned = (int)floor($totalAmount / 10);
 
             // 4. Create Accounting Sales Invoice
             $invoice = Invoice::create([
@@ -141,7 +159,7 @@ class CheckoutController extends Controller
                 'date' => now()->toDateString(),
                 'party_id' => $party->id,
                 'store_id' => $store->id,
-                'notes' => 'طلب إلكتروني من المتجر - العميل: ' . $validated['name'] . ($validated['notes'] ? ' (' . $validated['notes'] . ')' : ''),
+                'notes' => 'طلب إلكتروني من المتجر - العميل: ' . $validated['name'] . ($cashbackDiscount > 0 ? " (تم تطبيق خصم كاش باك {$cashbackDiscount} ₪)" : ''),
             ]);
 
             // 5. Create Order
@@ -153,7 +171,10 @@ class CheckoutController extends Controller
                 'invoice_id' => $invoice->id,
                 'status' => 'pending',
                 'subtotal' => $subtotal,
-                'discount_amount' => 0,
+                'discount_amount' => $cashbackDiscount,
+                'points_earned' => $pointsEarned,
+                'points_redeemed' => $pointsToRedeem,
+                'cashback_discount' => $cashbackDiscount,
                 'shipping_fee' => $shippingFee,
                 'total_amount' => $totalAmount,
                 'payment_method' => $validated['payment_method'],
@@ -164,6 +185,31 @@ class CheckoutController extends Controller
                 'shipping_city' => $validated['city'] ?? '',
                 'notes' => $validated['notes'] ?? null,
             ]);
+
+            // 5.1 Update User Loyalty Points Balance and Log Transactions
+            if ($user) {
+                if ($pointsToRedeem > 0) {
+                    $user->decrement('points_balance', $pointsToRedeem);
+                    \App\Models\LoyaltyTransaction::create([
+                        'user_id' => $user->id,
+                        'points' => -$pointsToRedeem,
+                        'type' => 'redeemed',
+                        'description' => "استبدال {$pointsToRedeem} نقطة بخصم مالي {$cashbackDiscount} ₪ على الطلب #{$orderNumber}",
+                        'order_id' => $order->id,
+                    ]);
+                }
+
+                if ($pointsEarned > 0) {
+                    $user->increment('points_balance', $pointsEarned);
+                    \App\Models\LoyaltyTransaction::create([
+                        'user_id' => $user->id,
+                        'points' => $pointsEarned,
+                        'type' => 'earned',
+                        'description' => "كاش باك نقاط ولاء مكتسبة من الطلب #{$orderNumber}",
+                        'order_id' => $order->id,
+                    ]);
+                }
+            }
 
             // 6. Create Order Lines & Invoice Lines & Deduct Store Inventory
             foreach ($cartItems as $ci) {

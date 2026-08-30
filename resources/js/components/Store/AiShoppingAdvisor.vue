@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { router, usePage, Link } from '@inertiajs/vue3'
 import { 
     Sparkles, 
@@ -15,7 +15,12 @@ import {
     Cpu, 
     LogIn, 
     UserPlus,
-    Flame
+    Flame,
+    Mic,
+    MicOff,
+    Volume2,
+    VolumeX,
+    Radio
 } from 'lucide-vue-next'
 
 const page = usePage()
@@ -29,6 +34,15 @@ const selectedUseCase = ref('all')
 const recommendations = ref<any[]>([])
 const aiAdvice = ref('')
 const addedId = ref<number | null>(null)
+
+// Voice Recognition State
+const isListening = ref(false)
+const voiceSupported = ref(true)
+const speechError = ref('')
+let recognitionInstance: any = null
+
+// Text-to-Speech State
+const isSpeaking = ref(false)
 
 const quickPresets = [
     { label: 'لابتوب محاسبة وأعمال 💻', prompt: 'بدي لابتوب قوي وسريع لبرامج المحاسبة والأعمال اليومية', useCase: 'business', maxPrice: 4500 },
@@ -69,6 +83,102 @@ const getAdvice = async () => {
     }
 }
 
+// Voice Recognition Handlers
+const initSpeechRecognition = () => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) {
+        voiceSupported.value = false
+        return null
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = 'ar-SA' // Arabic Speech
+    recognition.continuous = false
+    recognition.interimResults = false
+
+    recognition.onstart = () => {
+        isListening.value = true
+        speechError.value = ''
+    }
+
+    recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0]?.transcript
+        if (transcript) {
+            userPrompt.value = transcript
+            isListening.value = false
+            getAdvice()
+        }
+    }
+
+    recognition.onerror = (event: any) => {
+        isListening.value = false
+        if (event.error === 'not-allowed') {
+            speechError.value = 'يرجى السماح بالوصول للميكروفون في المتصفح.'
+        } else if (event.error !== 'no-speech') {
+            speechError.value = 'تعذر التقاط الصوت، يرجى المحاولة ثانية.'
+        }
+        setTimeout(() => { speechError.value = '' }, 4000)
+    }
+
+    recognition.onend = () => {
+        isListening.value = false
+    }
+
+    return recognition
+}
+
+const toggleVoiceSearch = () => {
+    if (!user.value) {
+        isOpen.value = true
+        return
+    }
+
+    if (isListening.value) {
+        if (recognitionInstance) recognitionInstance.stop()
+        isListening.value = false
+        return
+    }
+
+    if (!recognitionInstance) {
+        recognitionInstance = initSpeechRecognition()
+    }
+
+    if (!recognitionInstance) {
+        speechError.value = 'المتصفح لا يدعم البحث الصوتي.'
+        setTimeout(() => { speechError.value = '' }, 4000)
+        return
+    }
+
+    try {
+        recognitionInstance.start()
+    } catch (err) {
+        try {
+            recognitionInstance.stop()
+            setTimeout(() => { recognitionInstance.start() }, 200)
+        } catch (e) {}
+    }
+}
+
+// Text-To-Speech (AI Voice Reading)
+const toggleSpeakAdvice = () => {
+    if (!('speechSynthesis' in window) || !aiAdvice.value) return
+
+    if (isSpeaking.value) {
+        window.speechSynthesis.cancel()
+        isSpeaking.value = false
+        return
+    }
+
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(aiAdvice.value)
+    utterance.lang = 'ar-SA'
+    utterance.rate = 0.95
+    utterance.onstart = () => { isSpeaking.value = true }
+    utterance.onend = () => { isSpeaking.value = false }
+    utterance.onerror = () => { isSpeaking.value = false }
+    window.speechSynthesis.speak(utterance)
+}
+
 const addToCart = (item: any) => {
     router.post(route('cart.add'), {
         item_id: item.id,
@@ -81,6 +191,15 @@ const addToCart = (item: any) => {
         }
     })
 }
+
+onUnmounted(() => {
+    if (recognitionInstance) {
+        try { recognitionInstance.stop() } catch (e) {}
+    }
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+    }
+})
 </script>
 
 <template>
@@ -112,6 +231,7 @@ const addToCart = (item: any) => {
             <div class="text-start">
                 <span class="font-black text-xs sm:text-sm block leading-tight">مستشار المشتريات الذكي AI</span>
                 <span v-if="!user" class="text-[10px] text-amber-300 font-bold block opacity-90">سجّل دخولك واستشره مجاناً</span>
+                <span v-else class="text-[10px] text-indigo-200 font-bold block opacity-90">تحدث بالصوت أو اكتب 🎙️</span>
             </div>
         </button>
 
@@ -166,7 +286,7 @@ const addToCart = (item: any) => {
                             مستشارك الذكي بانتظارك! 🤖
                         </h4>
                         <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed px-2">
-                            سجل دخولك بنقرة واحدة لتحصل على استشارات فورية ومطابقة مواصفات الأجهزة مع ميزانيتك ومخزون المستودع المركزي.
+                            سجل دخولك بنقرة واحدة لتحصل على استشارات فورية وبحث صوتي ذكي ومطابقة مواصفات الأجهزة مع ميزانيتك.
                         </p>
                     </div>
 
@@ -174,11 +294,11 @@ const addToCart = (item: any) => {
                     <div class="grid grid-cols-1 gap-2.5 text-start text-xs">
                         <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center gap-3">
                             <div class="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
-                                <Zap class="w-4 h-4" />
+                                <Mic class="w-4 h-4" />
                             </div>
                             <div>
-                                <strong class="block text-slate-900 dark:text-white font-bold">مطابقة ذكية حسب ميزانيتك</strong>
-                                <span class="text-[11px] text-slate-400">يقترح أفضل الخيارات بدقة من بين آلاف المنتجات</span>
+                                <strong class="block text-slate-900 dark:text-white font-bold">تحدث بصوتك مباشرة</strong>
+                                <span class="text-[11px] text-slate-400">يدعم اللهجة واللغة العربية للبحث الصوتي الفوري</span>
                             </div>
                         </div>
 
@@ -240,7 +360,7 @@ const addToCart = (item: any) => {
                     </div>
                 </div>
 
-                <!-- CASE 2: USER IS LOGGED IN (Full AI Advisor Experience) -->
+                <!-- CASE 2: USER IS LOGGED IN (Full AI Advisor Experience with Voice Search) -->
                 <div v-else class="p-4 overflow-y-auto overscroll-contain flex-1 space-y-4 text-sm">
                     <!-- Quick Presets -->
                     <div>
@@ -260,24 +380,67 @@ const addToCart = (item: any) => {
                         </div>
                     </div>
 
+                    <!-- Voice Search Live Listening Indicator -->
+                    <div v-if="isListening" class="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 rounded-2xl flex items-center justify-between animate-pulse">
+                        <div class="flex items-center gap-2.5">
+                            <div class="relative flex h-3 w-3">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+                            </div>
+                            <span class="text-xs font-bold text-rose-700 dark:text-rose-300">جاري الاستماع لصوتك... تحدث بما تبحث عنه 🎙️</span>
+                        </div>
+                        <button @click="toggleVoiceSearch" class="text-xs font-bold text-rose-600 hover:underline">
+                            إيقاف
+                        </button>
+                    </div>
+
+                    <!-- Voice Error Banner -->
+                    <div v-if="speechError" class="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs rounded-xl flex items-center gap-2">
+                        <span>⚠️ {{ speechError }}</span>
+                    </div>
+
                     <!-- Search Input & Budget -->
                     <div class="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-3.5 rounded-2xl border border-slate-200/60 dark:border-slate-800">
                         <div>
-                            <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">ما الذي تبحث عنه؟</label>
-                            <div class="relative">
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400">ما الذي تبحث عنه؟</label>
+                                <span class="text-[11px] text-indigo-600 dark:text-indigo-400 font-bold flex items-center gap-1">
+                                    <Mic class="w-3 h-3" />
+                                    يمكنك التحدث بالصوت
+                                </span>
+                            </div>
+                            <div class="relative flex items-center">
                                 <input
                                     v-model="userPrompt"
                                     @keydown.enter="getAdvice"
                                     type="text"
-                                    placeholder="مثال: لابتوب ممتاز للأعمال ببطارية تدوم طويلاً..."
-                                    class="w-full text-xs pe-9 ps-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder="اكتب أو اضغط على الميكروفون للتحدث..."
+                                    class="w-full text-xs pe-16 ps-3 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                                 />
-                                <button
-                                    @click="getAdvice"
-                                    class="absolute end-1.5 top-1.5 p-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-                                >
-                                    <Send class="w-3.5 h-3.5" />
-                                </button>
+
+                                <div class="absolute end-1.5 flex items-center gap-1">
+                                    <!-- Voice Recognition Mic Button -->
+                                    <button
+                                        type="button"
+                                        @click="toggleVoiceSearch"
+                                        :class="isListening ? 'bg-rose-500 text-white animate-bounce ring-2 ring-rose-400' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 hover:text-indigo-600'"
+                                        class="p-1.5 rounded-lg transition shadow-sm"
+                                        :title="isListening ? 'إيقاف الاستماع' : 'تحدث بالصوت للبحث'"
+                                    >
+                                        <Mic v-if="!isListening" class="w-3.5 h-3.5" />
+                                        <Radio v-else class="w-3.5 h-3.5 animate-spin" />
+                                    </button>
+
+                                    <!-- Send / Search Button -->
+                                    <button
+                                        type="button"
+                                        @click="getAdvice"
+                                        class="p-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition shadow-sm"
+                                        title="بحث ومطابقة بالذكاء الاصطناعي"
+                                    >
+                                        <Send class="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -299,16 +462,27 @@ const addToCart = (item: any) => {
                         </div>
                     </div>
 
-                    <!-- AI Advice Summary -->
-                    <div v-if="aiAdvice" class="p-3 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-2xl text-xs leading-relaxed text-indigo-900 dark:text-indigo-200 flex gap-2">
+                    <!-- AI Advice Summary with Text-To-Speech Button -->
+                    <div v-if="aiAdvice" class="p-3 bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 rounded-2xl text-xs leading-relaxed text-indigo-900 dark:text-indigo-200 flex items-start gap-2.5">
                         <Zap class="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                        <div>{{ aiAdvice }}</div>
+                        <div class="flex-1 min-w-0">
+                            <p class="leading-relaxed">{{ aiAdvice }}</p>
+                        </div>
+                        <button
+                            @click="toggleSpeakAdvice"
+                            :class="isSpeaking ? 'text-rose-500 bg-rose-100 dark:bg-rose-950' : 'text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'"
+                            class="p-1.5 rounded-lg transition shrink-0"
+                            :title="isSpeaking ? 'إيقاف الصوت' : 'استمع للإجابة بالصوت'"
+                        >
+                            <VolumeX v-if="isSpeaking" class="w-4 h-4 animate-pulse" />
+                            <Volume2 v-else class="w-4 h-4" />
+                        </button>
                     </div>
 
                     <!-- Loading State -->
                     <div v-if="isLoading" class="py-8 text-center text-slate-400 flex flex-col items-center gap-2">
                         <div class="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span class="text-xs">جاري فحص المواصفات ومطابقة المخزون...</span>
+                        <span class="text-xs">جاري فحص المواصفات ومطابقة المخزون صوتياً...</span>
                     </div>
 
                     <!-- Recommendations List -->

@@ -34,7 +34,7 @@ class StorefrontSeeder extends Seeder
         // 2. Ensure Default Warehouse
         $store = Store::firstOrCreate(
             ['id' => 1],
-            ['name' => 'المستودع المركزي الرئيسي (غزة)', 'code' => 'MAIN-01', 'is_active' => true]
+            ['name' => 'المستودع المركزي الرئيسي (غزة)', 'location' => 'غزة - المنطقة الصناعية', 'is_active' => true]
         );
 
         // 3. Ensure Categories

@@ -18,7 +18,6 @@ class StoreController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
-            'code' => 'nullable|string',
             'location' => 'nullable|string',
         ]);
 

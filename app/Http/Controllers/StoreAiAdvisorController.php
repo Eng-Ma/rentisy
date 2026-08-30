@@ -5,14 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\Item;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class StoreAiAdvisorController extends Controller
 {
     /**
-     * AI Shopping Advisor recommendation endpoint.
+     * AI Shopping Advisor recommendation endpoint (Requires Authentication).
      */
     public function recommend(Request $request)
     {
+        if (!Auth::check()) {
+            return response()->json([
+                'status' => 'unauthenticated',
+                'message' => 'يرجى تسجيل الدخول أولاً للاستفادة من مستشار المشتريات الذكي AI والحصول على ترشيحات مخصصة.',
+                'items' => [],
+                'ai_advice' => '',
+            ], 401);
+        }
+
         $prompt = trim($request->input('prompt', ''));
         $maxPrice = $request->filled('max_price') ? (float)$request->input('max_price') : null;
         $minPrice = $request->filled('min_price') ? (float)$request->input('min_price') : null;

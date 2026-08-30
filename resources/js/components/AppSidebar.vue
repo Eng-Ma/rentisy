@@ -15,6 +15,7 @@ import {
     ArrowLeftRight, 
     FileSpreadsheet, 
     ShoppingCart, 
+    ShoppingBag,
     Users, 
     Building2, 
     LineChart,
@@ -42,6 +43,7 @@ const navGroups: NavGroup[] = [
     {
         label: 'المستودعات والمبيعات',
         items: [
+            { title: 'طلبات المتجر الإلكتروني', href: '/orders', icon: ShoppingBag },
             { title: 'الأصناف والمخزون', href: '/items', icon: Package },
             { title: 'مناقلات وحركات المخزون', href: '/stock-transfers', icon: ArrowLeftRight },
             { title: 'عروض الأسعار', href: '/quotations', icon: FileSpreadsheet },

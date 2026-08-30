@@ -136,7 +136,12 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'getAgingReport'])
             ->addTool([$accountingTools, 'getCostCentersReport'])
             ->addTool([$accountingTools, 'getChecksReport'])
-            ->addTool([$accountingTools, 'getInventoryValuationReport']);
+            ->addTool([$accountingTools, 'getInventoryValuationReport'])
+            // E-Commerce Orders & AI Analytics (إدارة الطلبات والمبيعات الإلكترونية)
+            ->addTool([$accountingTools, 'getOrders'])
+            ->addTool([$accountingTools, 'getOrderDetails'])
+            ->addTool([$accountingTools, 'updateOrderStatus'])
+            ->addTool([$accountingTools, 'analyzeOrdersSales']);
 
         $server = $serverBuilder->build();
 

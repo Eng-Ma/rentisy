@@ -229,16 +229,17 @@ const logout = () => {
                                         كشف حسابي المحاسبي (ERP)
                                     </Link>
 
-                                    <div class="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-
-                                    <!-- Admin Link if Admin -->
-                                    <Link
-                                        :href="route('dashboard')"
-                                        class="flex items-center gap-2.5 px-4 py-2.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 font-semibold transition-colors"
-                                    >
-                                        <ExternalLink class="w-4 h-4" />
-                                        لوحة إدارة المحاسبة (ERP)
-                                    </Link>
+                                    <!-- Admin Link ONLY if Admin -->
+                                    <template v-if="authUser && authUser.role === 'admin'">
+                                        <div class="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+                                        <Link
+                                            :href="route('dashboard')"
+                                            class="flex items-center gap-2.5 px-4 py-2.5 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 font-semibold transition-colors"
+                                        >
+                                            <ExternalLink class="w-4 h-4" />
+                                            لوحة إدارة المحاسبة (ERP)
+                                        </Link>
+                                    </template>
 
                                     <button
                                         @click="logout"
@@ -513,11 +514,11 @@ const logout = () => {
                             المتجر مرتبط لحظياً بدفتر اليومية وشجرة الحسابات والمستودعات.
                         </p>
                         <Link
-                            :href="route('dashboard')"
+                            :href="route('admin.login')"
                             class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm"
                         >
                             <ExternalLink class="w-3.5 h-3.5" />
-                            دخول لوحة المحاسبة
+                            دخول لوحة إدارة المحاسبة (Admin)
                         </Link>
                     </div>
                 </div>

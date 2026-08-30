@@ -22,6 +22,8 @@ use App\Models\QuotationLine;
 use App\Models\FixedAsset;
 use App\Models\AssetDepreciation;
 use App\Models\JournalEntryLine;
+use App\Models\Order;
+use App\Models\OrderItem;
 use Illuminate\Support\Facades\DB;
 
 class AccountingTools
@@ -1718,5 +1720,160 @@ class AccountingTools
         }
 
         return json_encode(['report' => 'Inventory Valuation Report', 'total_inventory_value' => $totalSystemValue, 'stores' => $valuation], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    // --- E-COMMERCE ORDERS & AI SALES ANALYTICS TOOLS ---
+
+    #[McpTool(name: 'get_orders', description: 'Get a list of customer online store orders with optional filters by status (pending, processing, shipped, delivered, cancelled) and search')]
+    public function getOrders(?string $status = null, int $limit = 20, ?string $search = null): string
+    {
+        $query = Order::with(['user', 'party', 'invoice', 'items.item'])->latest();
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('order_number', 'like', "%{$search}%")
+                  ->orWhere('shipping_name', 'like', "%{$search}%")
+                  ->orWhere('shipping_phone', 'like', "%{$search}%");
+            });
+        }
+
+        $orders = $query->take($limit)->get();
+        if ($orders->isEmpty()) return "No store orders found matching criteria.";
+
+        return "Found " . $orders->count() . " store orders:\n" . $orders->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_order_details', description: 'Get detailed information for a specific order by its numeric ID or order number (e.g. ORD-20260830-XXXX)')]
+    public function getOrderDetails(string|int $orderIdOrNumber): string
+    {
+        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+            ->where('id', $orderIdOrNumber)
+            ->orWhere('order_number', $orderIdOrNumber)
+            ->first();
+
+        if (!$order) {
+            return "Error: Order '$orderIdOrNumber' not found.";
+        }
+
+        return "Order Details for #{$order->order_number}:\n" . $order->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'update_order_status', description: 'Update the status of an online store order (pending, processing, shipped, delivered, cancelled) with optional notes')]
+    public function updateOrderStatus(string|int $orderIdOrNumber, string $newStatus, ?string $notes = null): string
+    {
+        if (!in_array($newStatus, ['pending', 'processing', 'shipped', 'delivered', 'cancelled'])) {
+            return "Error: Invalid status '$newStatus'. Allowed: pending, processing, shipped, delivered, cancelled.";
+        }
+
+        $order = Order::with(['items', 'invoice'])
+            ->where('id', $orderIdOrNumber)
+            ->orWhere('order_number', $orderIdOrNumber)
+            ->first();
+
+        if (!$order) {
+            return "Error: Order '$orderIdOrNumber' not found.";
+        }
+
+        $oldStatus = $order->status;
+
+        DB::transaction(function () use ($order, $oldStatus, $newStatus, $notes) {
+            $order->status = $newStatus;
+            if ($notes) {
+                $order->notes = ($order->notes ? $order->notes . " | " : "") . $notes;
+            }
+
+            if ($newStatus === 'delivered' && $order->payment_method === 'cod') {
+                $order->payment_status = 'paid';
+            }
+
+            // Restore warehouse inventory if cancelled
+            if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
+                foreach ($order->items as $itemLine) {
+                    if ($itemLine->item_id) {
+                        $storeItem = StoreItem::where('item_id', $itemLine->item_id)->first();
+                        if ($storeItem) {
+                            $storeItem->increment('quantity', $itemLine->quantity);
+                        }
+                    }
+                }
+            }
+
+            $order->save();
+        });
+
+        return "Successfully updated order #{$order->order_number} status from '$oldStatus' to '$newStatus'.";
+    }
+
+    #[McpTool(name: 'analyze_orders_sales', description: 'Comprehensive AI Sales & Ecommerce Performance Analytics (revenue, top products, conversion rates, order status breakdown, city performance)')]
+    public function analyzeOrdersSales(?string $period = 'all'): string
+    {
+        $query = Order::query();
+
+        if ($period === 'today') {
+            $query->whereDate('created_at', now()->toDateString());
+        } elseif ($period === 'week') {
+            $query->where('created_at', '>=', now()->subDays(7));
+        } elseif ($period === 'month') {
+            $query->where('created_at', '>=', now()->subDays(30));
+        }
+
+        $allOrders = $query->with('items')->get();
+        $nonCancelled = $allOrders->where('status', '!=', 'cancelled');
+
+        $totalRevenue = $nonCancelled->sum('total_amount');
+        $totalOrdersCount = $allOrders->count();
+        $avgOrderValue = $totalOrdersCount > 0 ? ($totalRevenue / max(1, $nonCancelled->count())) : 0;
+
+        // Status breakdown
+        $statusBreakdown = [
+            'pending' => $allOrders->where('status', 'pending')->count(),
+            'processing' => $allOrders->where('status', 'processing')->count(),
+            'shipped' => $allOrders->where('status', 'shipped')->count(),
+            'delivered' => $allOrders->where('status', 'delivered')->count(),
+            'cancelled' => $allOrders->where('status', 'cancelled')->count(),
+        ];
+
+        // Top selling products
+        $productSales = [];
+        foreach ($nonCancelled as $ord) {
+            foreach ($ord->items as $line) {
+                $name = $line->item_name;
+                if (!isset($productSales[$name])) {
+                    $productSales[$name] = ['units_sold' => 0, 'total_revenue' => 0];
+                }
+                $productSales[$name]['units_sold'] += $line->quantity;
+                $productSales[$name]['total_revenue'] += $line->total_price;
+            }
+        }
+        uasort($productSales, fn($a, $b) => $b['total_revenue'] <=> $a['total_revenue']);
+        $topProducts = array_slice($productSales, 0, 5, true);
+
+        // Sales by payment method
+        $paymentMethods = [
+            'cod' => $nonCancelled->where('payment_method', 'cod')->sum('total_amount'),
+            'card' => $nonCancelled->where('payment_method', 'card')->sum('total_amount'),
+            'bank_transfer' => $nonCancelled->where('payment_method', 'bank_transfer')->sum('total_amount'),
+        ];
+
+        $analysis = [
+            'report_title' => 'E-commerce Store Sales & Order Performance Analysis',
+            'period' => $period,
+            'summary_metrics' => [
+                'total_orders' => $totalOrdersCount,
+                'successful_orders' => $nonCancelled->count(),
+                'total_sales_revenue' => round($totalRevenue, 2),
+                'average_order_value' => round($avgOrderValue, 2),
+                'currency' => 'ILS (₪)',
+            ],
+            'order_status_distribution' => $statusBreakdown,
+            'top_selling_products' => $topProducts,
+            'sales_by_payment_method' => $paymentMethods,
+        ];
+
+        return json_encode($analysis, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 }

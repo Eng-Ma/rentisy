@@ -71,12 +71,21 @@ Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(functi
     Route::post('/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])->name('social.disconnect');
 });
 
-Route::get('/privacy-policy', function () {
-    return view('privacy-policy');
-})->name('privacy.policy');
+use App\Http\Controllers\Auth\AdminAuthController;
+use App\Http\Controllers\OrderController;
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// --- Dedicated Admin Authentication ---
+Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');
+Route::post('/admin/login', [AdminAuthController::class, 'store'])->name('admin.login.store');
+Route::post('/admin/logout', [AdminAuthController::class, 'destroy'])->name('admin.logout');
+
+// --- Accounting ERP Admin Panel (Strictly Protected with Admin Middleware) ---
+Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Online Store Orders Management
+    Route::resource('orders', OrderController::class);
+    Route::post('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update_status');
 
     // General Accounting
     Route::resource('accounts', AccountController::class);

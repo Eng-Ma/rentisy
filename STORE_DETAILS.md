@@ -15,6 +15,13 @@
 4. **Live Social Proof Stream (إشعارات الشراء المباشرة)**:
    - Subtle floating toasts showing real-time anonymized purchases from various Palestinian cities (غزة، رام الله، الخليل، نابلس، بيت لحم، جنين).
 
+4. **Real Google & Facebook OAuth 2.0 Integration (تسجيل وربط حقيقي عبر جوجل وفيسبوك)**:
+   - Built on official `laravel/socialite` package.
+   - Dual-mode support:
+     1. **Login & Registration**: Instant 1-click registration/login with Google/Facebook, auto-generating linked customer profile and accounting party.
+     2. **Account Linking & Disconnection in Customer Portal (`/customer/profile`)**: Logged-in users can link or unlink their real Google / Facebook accounts.
+   - Configured in `config/services.php` and `.env` with `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`.
+
 5. **Payment Transfer Screenshot Proof (الدفع عبر إشعار وسكرين شوت التحويل)**:
    - Supports Palestinian bank transfers (بنك فلسطين) with account and IBAN PS66PALS000000000000001892040 and digital wallets (جوال باي / بال باي).
    - Shoppers upload their transfer receipt screenshot directly during checkout.

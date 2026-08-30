@@ -68,9 +68,7 @@ const updatePassword = () => {
 };
 
 const connectSocial = (provider: 'google' | 'facebook') => {
-    router.post(route('customer.social.connect', provider), {}, {
-        preserveScroll: true,
-    });
+    window.location.href = route('social.redirect', { provider, action: 'connect' });
 };
 
 const disconnectSocial = (provider: 'google' | 'facebook') => {

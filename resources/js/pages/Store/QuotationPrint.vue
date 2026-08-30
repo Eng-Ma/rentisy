@@ -59,22 +59,22 @@ const printQuotation = () => {
             <!-- Document Header -->
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-8 border-b-2 border-slate-100 dark:border-slate-800 gap-6">
                 <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-indigo-500/30">
-                        R
+                    <div class="w-14 h-14 rounded-2xl overflow-hidden border-2 border-emerald-500/30 bg-slate-900 shadow-lg shrink-0">
+                        <img src="/images/nova_logo.jpg" alt="NOVA Store" class="w-full h-full object-cover" />
                     </div>
                     <div>
-                        <h1 class="text-xl font-black tracking-tight text-slate-900 dark:text-white">شركة رنتيسي للحلول التقنية والأنظمة المحاسبية</h1>
-                        <p class="text-xs text-slate-500 mt-0.5">Rentisy Tech & ERP Solutions Ltd. • سجل تجاري: 56392014</p>
+                        <h1 class="text-xl font-black tracking-tight text-slate-900 dark:text-white">NOVA STORE | شركة نوفا للإلكترونيات والتقنية</h1>
+                        <p class="text-xs text-slate-500 mt-0.5">NOVA Tech & ERP Solutions Ltd. • سجل تجاري: 56392014</p>
                         <div class="flex items-center gap-4 text-[11px] text-slate-400 mt-1.5">
-                            <span class="flex items-center gap-1"><Phone class="w-3 h-3 text-indigo-500" /> 0599-123456</span>
-                            <span class="flex items-center gap-1"><Mail class="w-3 h-3 text-indigo-500" /> sales@rentisy.ps</span>
-                            <span>غزة / رام الله - فلسطين</span>
+                            <span class="flex items-center gap-1"><Phone class="w-3 h-3 text-emerald-500" /> 0599-000000</span>
+                            <span class="flex items-center gap-1"><Mail class="w-3 h-3 text-emerald-500" /> sales@nova-store.ps</span>
+                            <span>فلسطين</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="text-start sm:text-end bg-indigo-50 dark:bg-indigo-950/40 p-4 rounded-2xl border border-indigo-100 dark:border-indigo-900/50">
-                    <div class="text-xs font-semibold text-indigo-600 dark:text-indigo-400">عرض سعر رسمي معتمد</div>
+                <div class="text-start sm:text-end bg-emerald-50 dark:bg-emerald-950/40 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/50">
+                    <div class="text-xs font-semibold text-emerald-600 dark:text-emerald-400">عرض سعر رسمي معتمد</div>
                     <div class="text-lg font-black text-slate-900 dark:text-white mt-0.5">{{ quotation.quotation_number }}</div>
                     <div class="text-[11px] text-slate-500 mt-1">تاريخ الإصدار: {{ quotation.date }}</div>
                     <div class="text-[11px] font-bold text-rose-600 dark:text-rose-400">صالح لغاية: {{ quotation.expiry_date }} (15 يوماً)</div>
@@ -94,7 +94,7 @@ const printQuotation = () => {
                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">بيانات المستودع والضمان</h3>
                     <div class="text-xs text-slate-700 dark:text-slate-300">المستودع المصدر: <span class="font-bold text-slate-900 dark:text-white">{{ quotation.store?.name || 'المستودع الرئيسي' }}</span></div>
                     <div class="text-xs text-slate-700 dark:text-slate-300 mt-1">الضمان: <span class="font-bold text-emerald-600 dark:text-emerald-400">كفالة وصيانة رسمية معتمدة 12-24 شهر</span></div>
-                    <div class="text-xs text-slate-700 dark:text-slate-300 mt-1">العملة المعتمدة: <span class="font-bold text-indigo-600 dark:text-indigo-400">شيكل إسرائيلي (ILS ₪)</span></div>
+                    <div class="text-xs text-slate-700 dark:text-slate-300 mt-1">العملة المعتمدة: <span class="font-bold text-emerald-600 dark:text-emerald-400">شيكل إسرائيلي (ILS ₪)</span></div>
                 </div>
             </div>
 
@@ -119,7 +119,7 @@ const printQuotation = () => {
                             </td>
                             <td class="py-3.5 text-center font-bold">{{ line.quantity }}</td>
                             <td class="py-3.5 text-end font-semibold">{{ line.unit_price }} ₪</td>
-                            <td class="py-3.5 text-end font-black text-indigo-600 dark:text-indigo-400">{{ line.total }} ₪</td>
+                            <td class="py-3.5 text-end font-black text-emerald-600 dark:text-emerald-400">{{ line.total_price ?? line.total }} ₪</td>
                         </tr>
                     </tbody>
                 </table>
@@ -133,7 +133,7 @@ const printQuotation = () => {
                     <ul class="text-[11px] text-slate-500 space-y-1 list-disc list-inside">
                         <li>الأسعار شاملة ضريبة القيمة المضافة ما لم يذكر خلاف ذلك.</li>
                         <li>التسليم فوري من المستودعات أو خلال 24-48 ساعة لجميع محافظات الوطن.</li>
-                        <li>هذا العرض صادر آلياً من نظام رنتيسي المحاسبي المعتمد ولا يتطلب توقيعاً خطياً.</li>
+                        <li>هذا العرض صادر آلياً من نظام NOVA STORE ERP المحاسبي المعتمد ولا يتطلب توقيعاً خطياً.</li>
                     </ul>
 
                     <!-- Official Stamp simulation -->

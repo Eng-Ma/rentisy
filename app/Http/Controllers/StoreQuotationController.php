@@ -71,7 +71,7 @@ class StoreQuotationController extends Controller
             'total_amount' => $totalAmount,
             'tax_amount' => 0,
             'discount_amount' => 0,
-            'notes' => 'عرض سعر رسمي معتمد صادر من متجر رنتيسي الإلكتروني ERP. صالح لمدة 15 يوماً من تاريخ الإصدار.',
+            'notes' => 'عرض سعر رسمي معتمد صادر من متجر NOVA STORE | نوفا ستور للتقنية. صالح لمدة 15 يوماً من تاريخ الإصدار.',
         ]);
 
         foreach ($cartItems as $ci) {
@@ -81,7 +81,7 @@ class StoreQuotationController extends Controller
                     'item_id' => $ci->item->id,
                     'quantity' => $ci->quantity,
                     'unit_price' => $ci->item->effective_price,
-                    'total' => $ci->item->effective_price * $ci->quantity,
+                    'total_price' => $ci->item->effective_price * $ci->quantity,
                 ]);
             }
         }
@@ -123,7 +123,7 @@ class StoreQuotationController extends Controller
             'total_amount' => $totalAmount,
             'tax_amount' => 0,
             'discount_amount' => 0,
-            'notes' => "عرض سعر رسمي للمنتج: {$item->name}. صالح لمدة 15 يوماً.",
+            'notes' => "عرض سعر رسمي للمنتج: {$item->name}. صالح لمدة 15 يوماً من متجر NOVA STORE.",
         ]);
 
         QuotationLine::create([
@@ -131,7 +131,7 @@ class StoreQuotationController extends Controller
             'item_id' => $item->id,
             'quantity' => $qty,
             'unit_price' => $item->effective_price,
-            'total' => $totalAmount,
+            'total_price' => $totalAmount,
         ]);
 
         return redirect()->route('store.quotation.show', $quotation->id);

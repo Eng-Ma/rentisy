@@ -147,6 +147,8 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'getOrders'])
             ->addTool([$accountingTools, 'getOrderDetails'])
             ->addTool([$accountingTools, 'updateOrderStatus'])
+            ->addTool([$accountingTools, 'updateOrder'])
+            ->addTool([$accountingTools, 'deleteOrder'])
             ->addTool([$accountingTools, 'analyzeOrdersSales']);
 
         $server = $serverBuilder->build();

@@ -1724,20 +1724,82 @@ class AccountingTools
 
     // --- E-COMMERCE ORDERS & AI SALES ANALYTICS TOOLS ---
 
-    #[McpTool(name: 'get_orders', description: 'Get a list of customer online store orders with optional filters by status (pending, processing, shipped, delivered, cancelled) and search')]
-    public function getOrders(?string $status = null, int $limit = 20, ?string $search = null): string
+    protected function normalizeOrderStatus(string $status): string
+    {
+        $s = trim(mb_strtolower($status));
+        if (in_array($s, ['shipped', 'delivering', 'out_for_delivery', 'شحن', 'تم الشحن', 'مشحون', 'توصيل', 'قيد التوصيل', 'بدنا نوصله', 'نوصله', 'ارسال', 'تم الارسال', 'جاري التوصيل', 'في الطريق'])) {
+            return 'shipped';
+        }
+        if (in_array($s, ['delivered', 'completed', 'تسليم', 'تم التسليم', 'تم التوصيل', 'مسلم', 'واصل', 'مكتمل', 'تم استلامه', 'استلم'])) {
+            return 'delivered';
+        }
+        if (in_array($s, ['processing', 'preparing', 'تجهيز', 'قيد التجهيز', 'جاري التجهيز', 'مجهز', 'في المستودع', 'تحضير'])) {
+            return 'processing';
+        }
+        if (in_array($s, ['cancelled', 'canceled', 'rejected', 'الغاء', 'إلغاء', 'ملغي', 'مرفوض', 'الغيه', 'الغي'])) {
+            return 'cancelled';
+        }
+        if (in_array($s, ['pending', 'waiting', 'انتظار', 'معلق', 'قيد الانتظار', 'جديد', 'غير مؤكد'])) {
+            return 'pending';
+        }
+        return $s;
+    }
+
+    protected function findOrder(string $identifier): ?Order
+    {
+        $identifier = trim($identifier);
+
+        // 1. Direct Numeric ID match
+        if (is_numeric($identifier)) {
+            $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])->find((int)$identifier);
+            if ($order) return $order;
+        }
+
+        // 2. Exact or partial Order Number match (e.g. ORD-20260830-101 or 101)
+        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+            ->where('order_number', $identifier)
+            ->orWhere('order_number', 'like', "%{$identifier}%")
+            ->first();
+        if ($order) return $order;
+
+        // 3. Customer Shipping Name / User Name / Party Name match
+        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+            ->where('shipping_name', 'like', "%{$identifier}%")
+            ->orWhereHas('user', function($q) use ($identifier) {
+                $q->where('name', 'like', "%{$identifier}%");
+            })
+            ->orWhereHas('party', function($q) use ($identifier) {
+                $q->where('name', 'like', "%{$identifier}%");
+            })
+            ->latest()
+            ->first();
+        if ($order) return $order;
+
+        // 4. Phone match
+        return Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+            ->where('shipping_phone', 'like', "%{$identifier}%")
+            ->latest()
+            ->first();
+    }
+
+    #[McpTool(name: 'get_orders', description: 'Get or search customer store orders. Filter by search query (customer name, phone, order number, product name) or status (pending, processing, shipped, delivered, cancelled)')]
+    public function getOrders(?string $search = null, ?string $status = null, int $limit = 20): string
     {
         $query = Order::with(['user', 'party', 'invoice', 'items.item'])->latest();
 
         if ($status) {
-            $query->where('status', $status);
+            $normalizedStatus = $this->normalizeOrderStatus($status);
+            $query->where('status', $normalizedStatus);
         }
 
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('order_number', 'like', "%{$search}%")
                   ->orWhere('shipping_name', 'like', "%{$search}%")
-                  ->orWhere('shipping_phone', 'like', "%{$search}%");
+                  ->orWhere('shipping_phone', 'like', "%{$search}%")
+                  ->orWhereHas('items', function ($qi) use ($search) {
+                      $qi->where('item_name', 'like', "%{$search}%");
+                  });
             });
         }
 
@@ -1747,51 +1809,48 @@ class AccountingTools
         return "Found " . $orders->count() . " store orders:\n" . $orders->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
-    #[McpTool(name: 'get_order_details', description: 'Get detailed information for a specific order by its numeric ID or order number (e.g. ORD-20260830-XXXX)')]
-    public function getOrderDetails(string|int $orderIdOrNumber): string
+    #[McpTool(name: 'get_order_details', description: 'Get detailed information for a specific order by its order number, ID, customer name (e.g. محمود عياش), or phone')]
+    public function getOrderDetails(string $orderIdentifier): string
     {
-        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
-            ->where('id', $orderIdOrNumber)
-            ->orWhere('order_number', $orderIdOrNumber)
-            ->first();
+        $order = $this->findOrder($orderIdentifier);
 
         if (!$order) {
-            return "Error: Order '$orderIdOrNumber' not found.";
+            return "Error: Order for '$orderIdentifier' not found. You can use 'get_orders' to list all orders.";
         }
 
-        return "Order Details for #{$order->order_number}:\n" . $order->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        return "Order Details for #{$order->order_number} (Customer: {$order->shipping_name}):\n" . $order->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
-    #[McpTool(name: 'update_order_status', description: 'Update the status of an online store order (pending, processing, shipped, delivered, cancelled) with optional notes')]
-    public function updateOrderStatus(string|int $orderIdOrNumber, string $newStatus, ?string $notes = null): string
+    #[McpTool(name: 'update_order_status', description: 'Update the status of an online store order to shipped/delivering (بدنا نوصله / قيد التوصيل / تم الشحن), delivered (تم التسليم), processing (قيد التجهيز), cancelled (إلغاء), or pending. Accepts order number, ID, or customer name')]
+    public function updateOrderStatus(string $orderIdentifier, string $status, ?string $notes = null): string
     {
-        if (!in_array($newStatus, ['pending', 'processing', 'shipped', 'delivered', 'cancelled'])) {
-            return "Error: Invalid status '$newStatus'. Allowed: pending, processing, shipped, delivered, cancelled.";
-        }
-
-        $order = Order::with(['items', 'invoice'])
-            ->where('id', $orderIdOrNumber)
-            ->orWhere('order_number', $orderIdOrNumber)
-            ->first();
+        $order = $this->findOrder($orderIdentifier);
 
         if (!$order) {
-            return "Error: Order '$orderIdOrNumber' not found.";
+            return "Error: Order for '$orderIdentifier' not found. Please verify the customer name or order number.";
+        }
+
+        $normalizedStatus = $this->normalizeOrderStatus($status);
+        $allowed = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+
+        if (!in_array($normalizedStatus, $allowed)) {
+            return "Error: Invalid status '$status'. Allowed statuses: pending, processing, shipped (بدنا نوصله), delivered (تم التسليم), cancelled (ملغي).";
         }
 
         $oldStatus = $order->status;
 
-        DB::transaction(function () use ($order, $oldStatus, $newStatus, $notes) {
-            $order->status = $newStatus;
+        DB::transaction(function () use ($order, $oldStatus, $normalizedStatus, $notes) {
+            $order->status = $normalizedStatus;
             if ($notes) {
                 $order->notes = ($order->notes ? $order->notes . " | " : "") . $notes;
             }
 
-            if ($newStatus === 'delivered' && $order->payment_method === 'cod') {
+            if ($normalizedStatus === 'delivered' && $order->payment_method === 'cod') {
                 $order->payment_status = 'paid';
             }
 
             // Restore warehouse inventory if cancelled
-            if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
+            if ($normalizedStatus === 'cancelled' && $oldStatus !== 'cancelled') {
                 foreach ($order->items as $itemLine) {
                     if ($itemLine->item_id) {
                         $storeItem = StoreItem::where('item_id', $itemLine->item_id)->first();
@@ -1805,7 +1864,77 @@ class AccountingTools
             $order->save();
         });
 
-        return "Successfully updated order #{$order->order_number} status from '$oldStatus' to '$newStatus'.";
+        $statusArabic = match($normalizedStatus) {
+            'shipped' => 'قيد التوصيل / تم الشحن (Shipped)',
+            'delivered' => 'تم التسليم بنجاح (Delivered)',
+            'processing' => 'قيد التجهيز بالمستودع (Processing)',
+            'cancelled' => 'تم إلغاء الطلب واسترجاع المخزون (Cancelled)',
+            default => 'قيد الانتظار (Pending)',
+        };
+
+        return "تم تحديث حالة طلب العميل ({$order->shipping_name}) رقم #{$order->order_number} بنجاح إلى: {$statusArabic}.";
+    }
+
+    #[McpTool(name: 'update_order', description: 'Full master tool to update any aspect of a customer order (status, customer name, phone, address, city, payment status, payment method, notes)')]
+    public function updateOrder(
+        string $orderIdentifier,
+        ?string $status = null,
+        ?string $shippingName = null,
+        ?string $shippingPhone = null,
+        ?string $shippingAddress = null,
+        ?string $shippingCity = null,
+        ?string $paymentStatus = null,
+        ?string $paymentMethod = null,
+        ?string $notes = null
+    ): string {
+        $order = $this->findOrder($orderIdentifier);
+        if (!$order) {
+            return "Error: Order for '$orderIdentifier' not found.";
+        }
+
+        DB::transaction(function () use ($order, $status, $shippingName, $shippingPhone, $shippingAddress, $shippingCity, $paymentStatus, $paymentMethod, $notes) {
+            if ($status) {
+                $normalized = $this->normalizeOrderStatus($status);
+                $oldStatus = $order->status;
+                $order->status = $normalized;
+
+                if ($normalized === 'cancelled' && $oldStatus !== 'cancelled') {
+                    foreach ($order->items as $itemLine) {
+                        if ($itemLine->item_id) {
+                            $si = StoreItem::where('item_id', $itemLine->item_id)->first();
+                            if ($si) $si->increment('quantity', $itemLine->quantity);
+                        }
+                    }
+                }
+            }
+            if ($shippingName) $order->shipping_name = $shippingName;
+            if ($shippingPhone) $order->shipping_phone = $shippingPhone;
+            if ($shippingAddress) $order->shipping_address = $shippingAddress;
+            if ($shippingCity) $order->shipping_city = $shippingCity;
+            if ($paymentStatus) $order->payment_status = $paymentStatus;
+            if ($paymentMethod) $order->payment_method = $paymentMethod;
+            if ($notes) {
+                $order->notes = ($order->notes ? $order->notes . " | " : "") . $notes;
+            }
+
+            $order->save();
+        });
+
+        return "تم تحديث بيانات الطلب #{$order->order_number} الخاص بالعميل ({$order->shipping_name}) بنجاح.";
+    }
+
+    #[McpTool(name: 'delete_order', description: 'Delete a customer order by order number, ID, or customer name')]
+    public function deleteOrder(string $orderIdentifier): string
+    {
+        $order = $this->findOrder($orderIdentifier);
+        if (!$order) {
+            return "Error: Order for '$orderIdentifier' not found.";
+        }
+
+        $orderNumber = $order->order_number;
+        $order->delete();
+
+        return "تم حذف الطلب رقم #{$orderNumber} بنجاح.";
     }
 
     #[McpTool(name: 'analyze_orders_sales', description: 'Comprehensive AI Sales & Ecommerce Performance Analytics (revenue, top products, conversion rates, order status breakdown, city performance)')]

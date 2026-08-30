@@ -126,12 +126,12 @@ const addToCart = (item: any) => {
         >
             <div 
                 v-if="isOpen" 
-                class="absolute bottom-16 start-0 w-[360px] sm:w-[420px] max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-xl"
+                class="absolute bottom-16 start-0 w-[360px] sm:w-[420px] max-h-[85vh] flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden transform-gpu z-50"
             >
                 <!-- Header -->
-                <div class="p-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white flex items-center justify-between shadow-md">
+                <div class="p-4 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white flex items-center justify-between shadow-md shrink-0">
                     <div class="flex items-center gap-2.5">
-                        <div class="p-2 bg-white/15 rounded-xl backdrop-blur-md">
+                        <div class="p-2 bg-white/15 rounded-xl">
                             <Sparkles class="w-5 h-5 text-amber-300" />
                         </div>
                         <div>
@@ -145,12 +145,11 @@ const addToCart = (item: any) => {
                 </div>
 
                 <!-- CASE 1: USER IS NOT LOGGED IN (Stunning VIP Teaser & Auth Prompt) -->
-                <div v-if="!user" class="p-6 overflow-y-auto flex-1 space-y-5 text-center">
+                <div v-if="!user" class="p-6 overflow-y-auto overscroll-contain flex-1 space-y-5 text-center">
                     <!-- Glowing AI Icon -->
-                    <div class="relative mx-auto w-20 h-20 flex items-center justify-center">
-                        <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-amber-400 to-indigo-600 opacity-30 blur-lg animate-pulse"></div>
-                        <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-600 flex items-center justify-center text-white shadow-xl shadow-indigo-500/30">
-                            <Cpu class="w-8 h-8 text-amber-300 animate-pulse" />
+                    <div class="relative mx-auto w-16 h-16 flex items-center justify-center">
+                        <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-600 flex items-center justify-center text-white shadow-lg shadow-indigo-500/25">
+                            <Cpu class="w-8 h-8 text-amber-300" />
                         </div>
                         <div class="absolute -bottom-1 -end-1 p-1 bg-amber-500 rounded-full text-slate-950 shadow-md">
                             <Lock class="w-3.5 h-3.5" />
@@ -242,7 +241,7 @@ const addToCart = (item: any) => {
                 </div>
 
                 <!-- CASE 2: USER IS LOGGED IN (Full AI Advisor Experience) -->
-                <div v-else class="p-4 overflow-y-auto flex-1 space-y-4 text-sm">
+                <div v-else class="p-4 overflow-y-auto overscroll-contain flex-1 space-y-4 text-sm">
                     <!-- Quick Presets -->
                     <div>
                         <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">

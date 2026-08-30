@@ -97,7 +97,37 @@ html {
         @apply border-border;
     }
 
+    html {
+        scroll-behavior: smooth;
+    }
+
     body {
-        @apply bg-background text-foreground premium-gradient min-h-screen bg-fixed;
+        @apply bg-background text-foreground min-h-screen;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    /* Ultra-smooth lightweight scrollbars */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(100, 116, 139, 0.25) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(100, 116, 139, 0.25);
+        border-radius: 9999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(100, 116, 139, 0.45);
     }
 }

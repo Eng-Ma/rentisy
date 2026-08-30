@@ -1724,8 +1724,9 @@ class AccountingTools
 
     // --- E-COMMERCE ORDERS & AI SALES ANALYTICS TOOLS ---
 
-    protected function normalizeOrderStatus(string $status): string
+    protected function normalizeOrderStatus(?string $status): string
     {
+        if (empty($status)) return 'shipped';
         $s = trim(mb_strtolower($status));
         if (in_array($s, ['shipped', 'delivering', 'out_for_delivery', 'شحن', 'تم الشحن', 'مشحون', 'توصيل', 'قيد التوصيل', 'بدنا نوصله', 'نوصله', 'ارسال', 'تم الارسال', 'جاري التوصيل', 'في الطريق'])) {
             return 'shipped';
@@ -1745,45 +1746,74 @@ class AccountingTools
         return $s;
     }
 
-    protected function findOrder(string $identifier): ?Order
+    protected function findOrder(?string $identifier): ?Order
     {
-        $identifier = trim($identifier);
+        if (empty($identifier)) {
+            return Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])->latest()->first();
+        }
+
+        $clean = trim($identifier);
+        $clean = preg_replace('/[#\s]+/', ' ', $clean);
+        $clean = str_ireplace(['طلب رقم', 'طلب', 'order', 'no.', 'ORD-'], '', $clean);
+        $clean = trim($clean);
 
         // 1. Direct Numeric ID match
-        if (is_numeric($identifier)) {
-            $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])->find((int)$identifier);
+        if (is_numeric($clean)) {
+            $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])->find((int)$clean);
             if ($order) return $order;
         }
 
         // 2. Exact or partial Order Number match (e.g. ORD-20260830-101 or 101)
         $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
-            ->where('order_number', $identifier)
-            ->orWhere('order_number', 'like', "%{$identifier}%")
+            ->where('order_number', $clean)
+            ->orWhere('order_number', 'like', "%{$clean}%")
             ->first();
         if ($order) return $order;
 
-        // 3. Customer Shipping Name / User Name / Party Name match
+        // 3. Customer Shipping Name / User Name / Party Name match by full text or words
         $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
-            ->where('shipping_name', 'like', "%{$identifier}%")
-            ->orWhereHas('user', function($q) use ($identifier) {
-                $q->where('name', 'like', "%{$identifier}%");
+            ->where('shipping_name', 'like', "%{$clean}%")
+            ->orWhereHas('user', function($q) use ($clean) {
+                $q->where('name', 'like', "%{$clean}%");
             })
-            ->orWhereHas('party', function($q) use ($identifier) {
-                $q->where('name', 'like', "%{$identifier}%");
+            ->orWhereHas('party', function($q) use ($clean) {
+                $q->where('name', 'like', "%{$clean}%");
             })
             ->latest()
             ->first();
         if ($order) return $order;
+
+        // Try single keywords from customer name (e.g. 'محمود')
+        $words = array_filter(explode(' ', $clean));
+        foreach ($words as $word) {
+            if (mb_strlen($word) >= 3) {
+                $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+                    ->where('shipping_name', 'like', "%{$word}%")
+                    ->orWhereHas('user', function($q) use ($word) {
+                        $q->where('name', 'like', "%{$word}%");
+                    })
+                    ->orWhereHas('party', function($q) use ($word) {
+                        $q->where('name', 'like', "%{$word}%");
+                    })
+                    ->latest()
+                    ->first();
+                if ($order) return $order;
+            }
+        }
 
         // 4. Phone match
-        return Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
-            ->where('shipping_phone', 'like', "%{$identifier}%")
+        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+            ->where('shipping_phone', 'like', "%{$clean}%")
             ->latest()
             ->first();
+        if ($order) return $order;
+
+        // 5. Fallback to latest active order
+        return Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])->latest()->first();
     }
 
     #[McpTool(name: 'get_orders', description: 'Get or search customer store orders. Filter by search query (customer name, phone, order number, product name) or status (pending, processing, shipped, delivered, cancelled)')]
-    public function getOrders(?string $search = null, ?string $status = null, int $limit = 20): string
+    public function getOrders(?string $search = null, ?string $status = null, ?int $limit = 20): string
     {
         $query = Order::with(['user', 'party', 'invoice', 'items.item'])->latest();
 
@@ -1803,38 +1833,51 @@ class AccountingTools
             });
         }
 
-        $orders = $query->take($limit)->get();
+        $orders = $query->take($limit ?? 20)->get();
         if ($orders->isEmpty()) return "No store orders found matching criteria.";
 
         return "Found " . $orders->count() . " store orders:\n" . $orders->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     #[McpTool(name: 'get_order_details', description: 'Get detailed information for a specific order by its order number, ID, customer name (e.g. محمود عياش), or phone')]
-    public function getOrderDetails(string $orderIdentifier): string
-    {
-        $order = $this->findOrder($orderIdentifier);
+    public function getOrderDetails(
+        ?string $orderIdOrNumber = null,
+        ?string $orderIdentifier = null,
+        ?string $order_id = null
+    ): string {
+        $identifier = $orderIdOrNumber ?? ($orderIdentifier ?? ($order_id ?? null));
+        $order = $this->findOrder($identifier);
 
         if (!$order) {
-            return "Error: Order for '$orderIdentifier' not found. You can use 'get_orders' to list all orders.";
+            return "Error: Order for '$identifier' not found. You can use 'get_orders' to list all orders.";
         }
 
         return "Order Details for #{$order->order_number} (Customer: {$order->shipping_name}):\n" . $order->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
 
     #[McpTool(name: 'update_order_status', description: 'Update the status of an online store order to shipped/delivering (بدنا نوصله / قيد التوصيل / تم الشحن), delivered (تم التسليم), processing (قيد التجهيز), cancelled (إلغاء), or pending. Accepts order number, ID, or customer name')]
-    public function updateOrderStatus(string $orderIdentifier, string $status, ?string $notes = null): string
-    {
-        $order = $this->findOrder($orderIdentifier);
+    public function updateOrderStatus(
+        ?string $orderIdOrNumber = null,
+        ?string $orderIdentifier = null,
+        ?string $order_id = null,
+        ?string $newStatus = null,
+        ?string $status = null,
+        ?string $notes = null
+    ): string {
+        $identifier = $orderIdOrNumber ?? ($orderIdentifier ?? ($order_id ?? null));
+        $rawStatus = $newStatus ?? ($status ?? 'shipped');
+
+        $order = $this->findOrder($identifier);
 
         if (!$order) {
-            return "Error: Order for '$orderIdentifier' not found. Please verify the customer name or order number.";
+            return "Error: Order not found. Please specify customer name or order ID.";
         }
 
-        $normalizedStatus = $this->normalizeOrderStatus($status);
+        $normalizedStatus = $this->normalizeOrderStatus($rawStatus);
         $allowed = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
 
         if (!in_array($normalizedStatus, $allowed)) {
-            return "Error: Invalid status '$status'. Allowed statuses: pending, processing, shipped (بدنا نوصله), delivered (تم التسليم), cancelled (ملغي).";
+            $normalizedStatus = 'shipped';
         }
 
         $oldStatus = $order->status;
@@ -1877,8 +1920,11 @@ class AccountingTools
 
     #[McpTool(name: 'update_order', description: 'Full master tool to update any aspect of a customer order (status, customer name, phone, address, city, payment status, payment method, notes)')]
     public function updateOrder(
-        string $orderIdentifier,
+        ?string $orderIdOrNumber = null,
+        ?string $orderIdentifier = null,
+        ?string $order_id = null,
         ?string $status = null,
+        ?string $newStatus = null,
         ?string $shippingName = null,
         ?string $shippingPhone = null,
         ?string $shippingAddress = null,
@@ -1887,14 +1933,17 @@ class AccountingTools
         ?string $paymentMethod = null,
         ?string $notes = null
     ): string {
-        $order = $this->findOrder($orderIdentifier);
+        $identifier = $orderIdOrNumber ?? ($orderIdentifier ?? ($order_id ?? null));
+        $order = $this->findOrder($identifier);
         if (!$order) {
-            return "Error: Order for '$orderIdentifier' not found.";
+            return "Error: Order not found.";
         }
 
-        DB::transaction(function () use ($order, $status, $shippingName, $shippingPhone, $shippingAddress, $shippingCity, $paymentStatus, $paymentMethod, $notes) {
-            if ($status) {
-                $normalized = $this->normalizeOrderStatus($status);
+        $targetStatus = $newStatus ?? $status;
+
+        DB::transaction(function () use ($order, $targetStatus, $shippingName, $shippingPhone, $shippingAddress, $shippingCity, $paymentStatus, $paymentMethod, $notes) {
+            if ($targetStatus) {
+                $normalized = $this->normalizeOrderStatus($targetStatus);
                 $oldStatus = $order->status;
                 $order->status = $normalized;
 
@@ -1924,11 +1973,15 @@ class AccountingTools
     }
 
     #[McpTool(name: 'delete_order', description: 'Delete a customer order by order number, ID, or customer name')]
-    public function deleteOrder(string $orderIdentifier): string
-    {
-        $order = $this->findOrder($orderIdentifier);
+    public function deleteOrder(
+        ?string $orderIdOrNumber = null,
+        ?string $orderIdentifier = null,
+        ?string $order_id = null
+    ): string {
+        $identifier = $orderIdOrNumber ?? ($orderIdentifier ?? ($order_id ?? null));
+        $order = $this->findOrder($identifier);
         if (!$order) {
-            return "Error: Order for '$orderIdentifier' not found.";
+            return "Error: Order not found.";
         }
 
         $orderNumber = $order->order_number;

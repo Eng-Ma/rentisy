@@ -161,7 +161,7 @@ const addToCart = (item: any) => {
                     <div class="space-y-2">
                         <span class="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-xs font-black">
                             <Sparkles class="w-3.5 h-3.5" />
-                            ميزة حصرية لأعضاء رنتيسي ستور
+                            ميزة حصرية لأعضاء NOVA STORE
                         </span>
                         <h4 class="text-base font-black text-slate-900 dark:text-white">
                             مستشارك الذكي بانتظارك! 🤖

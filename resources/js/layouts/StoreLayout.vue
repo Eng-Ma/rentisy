@@ -103,15 +103,18 @@ const logout = () => {
                 <div class="flex items-center justify-between h-20 gap-4">
                     <!-- Logo -->
                     <Link :href="route('home')" class="flex items-center gap-3 group shrink-0">
-                        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-                            <StoreIcon class="w-6 h-6" />
+                        <div class="w-12 h-12 rounded-2xl overflow-hidden border-2 border-emerald-500/30 shadow-lg shadow-emerald-500/20 group-hover:scale-105 group-hover:border-emerald-400 transition-all bg-slate-900 flex items-center justify-center">
+                            <img src="/images/nova_logo.jpg" alt="NOVA Store" class="w-full h-full object-cover" />
                         </div>
                         <div>
-                            <span class="text-xl font-black tracking-tight bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent block">
-                                رنتيسي ستور
-                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xl font-black tracking-tight bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent block">
+                                    NOVA STORE
+                                </span>
+                                <span class="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">PRO</span>
+                            </div>
                             <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium block">
-                                المتجر الذكي المتكامل
+                                نوفا ستور — للتقنية الذكية
                             </span>
                         </div>
                     </Link>
@@ -479,19 +482,21 @@ const logout = () => {
                     <!-- Brand info -->
                     <div class="lg:col-span-2 space-y-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white font-bold">
-                                <StoreIcon class="w-5 h-5" />
+                            <div class="w-11 h-11 rounded-2xl overflow-hidden border border-slate-700 bg-slate-900 shadow-md">
+                                <img src="/images/nova_logo.jpg" alt="NOVA Store" class="w-full h-full object-cover" />
                             </div>
-                            <span class="text-xl font-black text-white">رنتيسي ستور ERP</span>
+                            <div>
+                                <span class="text-xl font-black text-white block">NOVA STORE</span>
+                                <span class="text-[10px] text-emerald-400 font-bold">نوفا ستور — الوجهة الذكية للإلكترونيات</span>
+                            </div>
                         </div>
                         <p class="text-xs leading-relaxed text-slate-400 max-w-sm">
-                            منظومة التجارة والمحاسبة الإلكترونية الذكية. نوفر لك أحدث المنتجات الأصلية مع دمج مباشر بالدفاتر المحاسبية وإصدار الفواتير الفورية.
+                            المنظومة الإلكترونية الرائدة للأجهزة والحلول التقنية الذكية. نوفر لك أحدث المنتجات الأصلية مع كفالة معتمدة ودمج محاسبي متكامل وفواتير فورية.
                         </p>
                         <div class="flex items-center gap-3 pt-2">
-                            <span class="text-xs text-slate-400 font-semibold">طرق الدفع المدعومة:</span>
-                            <span class="px-2 py-1 rounded bg-slate-800 text-[10px] font-bold text-slate-300">الدفع عند الاستلام</span>
-                            <span class="px-2 py-1 rounded bg-slate-800 text-[10px] font-bold text-slate-300">فيزا / ماستركارد</span>
-                            <span class="px-2 py-1 rounded bg-slate-800 text-[10px] font-bold text-slate-300">تحويل بنكي</span>
+                            <span class="text-xs text-slate-400 font-semibold">الدفع المعتمد:</span>
+                            <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-[10px] font-bold text-slate-300 border border-slate-700">تحويل بنكي فوري</span>
+                            <span class="px-2.5 py-1 rounded-lg bg-slate-800 text-[10px] font-bold text-slate-300 border border-slate-700">محافظ رقمية</span>
                         </div>
                     </div>
 

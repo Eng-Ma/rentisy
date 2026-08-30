@@ -111,7 +111,7 @@ const getCategoryIcon = (index: number) => {
 </script>
 
 <template>
-    <StoreLayout title="رنتيسي ستور | الصفحة الرئيسية للمتجر الإلكتروني" :storeContext="storeContext">
+    <StoreLayout title="NOVA STORE | متجر نوفا للتقنية والأجهزة الذكية" :storeContext="storeContext">
         <!-- Hero Section -->
         <section class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-emerald-950 to-slate-900 text-white py-16 md:py-24">
             <!-- Glow elements -->
@@ -123,7 +123,7 @@ const getCategoryIcon = (index: number) => {
                     <div class="lg:col-span-7 space-y-6 text-right">
                         <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold tracking-wide">
                             <Sparkles class="w-4 h-4 text-emerald-400" />
-                            <span>موسم التخفيضات الكبرى | عروض حصرية</span>
+                            <span>مرحباً بك في NOVA STORE | أحدث الأجهزة والتقنيات الذكية</span>
                         </div>
 
                         <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black leading-tight tracking-tight text-white">
@@ -134,7 +134,7 @@ const getCategoryIcon = (index: number) => {
                         </h1>
 
                         <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-xl font-normal">
-                            اكتشف تشكيلة واسعة من أحدث الأجهزة الإلكترونية والمستلزمات مع تجربة تسوق آمنة وسريعة، وربط تلقائي بحسابك المحاسبي مع إمكانية الدفع عند الاستلام.
+                            اكتشف تشكيلة واسعة من أحدث الأجهزة الإلكترونية والمستلزمات الذكية مع تجربة تسوق آمنة وسريعة، كاش باك فوري، وربط تلقائي بحسابك المحاسبي.
                         </p>
 
                         <div class="flex flex-wrap items-center gap-4 pt-4">

@@ -228,10 +228,15 @@ const isWishlisted = () => {
                         </Link>
 
                         <!-- Cashback Reward Incentive Badge -->
-                        <div class="p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-xl text-center">
+                        <div v-if="item.allows_points !== false" class="p-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 rounded-xl text-center">
                             <span class="text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center justify-center gap-1.5">
                                 <Coins class="w-4 h-4 text-amber-500" />
                                 ستحصل على {{ Math.floor(item.effective_price / 10) * quantity }} نقطة كاش باك عند شراء هذا المنتج!
+                            </span>
+                        </div>
+                        <div v-else class="p-2.5 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-center">
+                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
+                                <span>⛔ هذا المنتج مستثنى من نظام احتساب وخصم النقاط</span>
                             </span>
                         </div>
                     </div>

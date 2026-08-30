@@ -47,7 +47,11 @@ class ItemController extends Controller
             'unit' => 'required|string',
             'purchase_price' => 'required|numeric|min:0',
             'sales_price' => 'required|numeric|min:0',
+            'discount_price' => 'nullable|numeric|min:0',
             'is_active' => 'boolean',
+            'is_featured' => 'boolean',
+            'is_deal' => 'boolean',
+            'allows_points' => 'boolean',
         ]);
 
         $item = Item::create($validated);
@@ -56,6 +60,26 @@ class ItemController extends Controller
             return response()->json($item);
         }
 
-        return redirect()->route('items.index')->with('success', 'Item created successfully.');
+        return redirect()->route('items.index')->with('success', 'تم إنشاء الصنف بنجاح.');
+    }
+
+    /**
+     * Toggle points & cashback eligibility for a product.
+     */
+    public function togglePoints(Request $request, $id)
+    {
+        $item = Item::findOrFail($id);
+        $item->allows_points = !$item->allows_points;
+        $item->save();
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'allows_points' => $item->allows_points,
+                'message' => $item->allows_points ? 'تم تفعيل نظام النقاط للصنف' : 'تم استثناء الصنف من نظام النقاط',
+            ]);
+        }
+
+        return back()->with('success', $item->allows_points ? 'تم تفعيل نظام النقاط والكاش باك لهذا الصنف.' : 'تم استثناء الصنف من نظام النقاط.');
     }
 }

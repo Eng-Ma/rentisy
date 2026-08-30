@@ -62,6 +62,7 @@ watchDebounced(
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">الوحدة</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">سعر الشراء</th>
                             <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">سعر البيع</th>
+                            <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">نظام النقاط والكاش باك</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -70,11 +71,24 @@ watchDebounced(
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-bold">{{ item.name }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ item.category?.name || 'غير مصنف' }}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ item.unit }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ item.purchase_price }}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ item.sales_price }}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ item.purchase_price }} ₪</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-bold text-emerald-600 dark:text-emerald-400">{{ item.sales_price }} ₪</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-center">
+                                <button
+                                    @click="router.post(route('items.toggle_points', item.id), {}, { preserveScroll: true })"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all shadow-sm"
+                                    :class="item.allows_points !== false 
+                                        ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200' 
+                                        : 'bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 hover:bg-rose-200'"
+                                    :title="item.allows_points !== false ? 'اضغط للتعطيل والاستثناء من النقاط' : 'اضغط للتفعيل واحتساب النقاط'"
+                                >
+                                    <span v-if="item.allows_points !== false">🎁 مفعّل بالنقاط</span>
+                                    <span v-else>⛔ مستثنى من النقاط</span>
+                                </button>
+                            </td>
                         </tr>
                         <tr v-if="items.data.length === 0">
-                            <td colspan="6" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">لا توجد أصناف حالياً.</td>
+                            <td colspan="7" class="px-6 py-4 text-center text-gray-500 dark:text-gray-400">لا توجد أصناف حالياً.</td>
                         </tr>
                     </tbody>
                 </table>

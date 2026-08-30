@@ -134,6 +134,7 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
     // Inventory & Warehouses
     Route::resource('items', ItemController::class);
+    Route::post('items/{item}/toggle-points', [ItemController::class, 'togglePoints'])->name('items.toggle_points');
     Route::resource('categories', CategoryController::class);
     Route::resource('stores', StoreController::class);
     Route::resource('stock-transfers', StockTransferController::class);

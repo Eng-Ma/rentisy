@@ -139,7 +139,8 @@ const currentShippingFee = computed(() => {
 
 const pointsDiscount = computed(() => {
     if (!form.redeem_points || !props.customer.points_balance) return 0
-    const maxDiscount = props.summary.subtotal * 0.5
+    const eligibleSubtotal = props.summary.pointsEligibleSubtotal !== undefined ? props.summary.pointsEligibleSubtotal : props.summary.subtotal
+    const maxDiscount = eligibleSubtotal * 0.30 // 30% maximum points discount!
     const pointsValue = props.customer.points_balance / 10
     return Math.min(pointsValue, maxDiscount)
 })
@@ -455,7 +456,7 @@ const submitSuggestion = async () => {
                                         استبدال نقاط الولاء (لديك {{ customer.points_balance }} نقطة ≈ {{ (customer.points_balance / 10).toFixed(2) }} ₪)
                                     </h4>
                                     <p class="text-[11px] text-amber-800/80 dark:text-amber-400/80">
-                                        استبدل نقاطك بخصم مالي مباشر على هذا الطلب
+                                        استبدل نقاطك بخصم مالي مباشر (بحد أقصى 30% من قيمة المنتجات المؤهلة)
                                     </p>
                                 </div>
                             </div>

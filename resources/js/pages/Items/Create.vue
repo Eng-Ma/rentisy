@@ -22,6 +22,7 @@ const form = useForm({
     purchase_price: 0,
     sales_price: 0,
     is_active: true,
+    allows_points: true,
 });
 
 const submit = () => {
@@ -87,9 +88,16 @@ const submit = () => {
                     <textarea v-model="form.description" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"></textarea>
                 </div>
 
-                <div class="flex items-center">
-                    <input type="checkbox" id="is_active" v-model="form.is_active" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                    <label for="is_active" class="mr-2 block text-sm text-gray-900 dark:text-gray-300">صنف فعال (نشط)</label>
+                <div class="flex flex-wrap gap-6 items-center">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="is_active" v-model="form.is_active" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                        <label for="is_active" class="mr-2 block text-sm text-gray-900 dark:text-gray-300">صنف فعال (نشط)</label>
+                    </div>
+
+                    <div class="flex items-center">
+                        <input type="checkbox" id="allows_points" v-model="form.allows_points" class="rounded border-gray-300 text-emerald-600 shadow-sm focus:border-emerald-300 focus:ring focus:ring-emerald-200 focus:ring-opacity-50">
+                        <label for="allows_points" class="mr-2 block text-sm text-emerald-700 dark:text-emerald-400 font-bold">تفعيل نظام النقاط والكاش باك لهذا الصنف 🎁</label>
+                    </div>
                 </div>
 
                 <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">

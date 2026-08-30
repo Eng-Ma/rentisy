@@ -42,6 +42,10 @@ class CheckoutController extends Controller
             return $ci->item ? $ci->item->effective_price * $ci->quantity : 0;
         });
 
+        $pointsEligibleSubtotal = $cartItems->sum(function ($ci) {
+            return ($ci->item && $ci->item->allows_points !== false) ? $ci->item->effective_price * $ci->quantity : 0;
+        });
+
         $deliveryZones = \App\Models\DeliveryZone::where('is_active', true)
             ->where('is_approved', true)
             ->orderBy('city')
@@ -63,6 +67,8 @@ class CheckoutController extends Controller
             'remainingSuggestions' => max(0, 2 - $userSuggestionsCount),
             'summary' => [
                 'subtotal' => round($subtotal, 2),
+                'pointsEligibleSubtotal' => round($pointsEligibleSubtotal, 2),
+                'maxPointsDiscount' => round($pointsEligibleSubtotal * 0.30, 2),
                 'shippingFee' => round($defaultShippingFee, 2),
                 'total' => round($total, 2),
                 'itemsCount' => $cartItems->sum('quantity'),
@@ -154,12 +160,6 @@ class CheckoutController extends Controller
             }
 
             // 3. Calculate order sums & Delivery Fee based on Zone or Pickup
-            $subtotal = 0;
-            foreach ($cartItems as $ci) {
-                $price = $ci->item ? $ci->item->effective_price : 0;
-                $subtotal += $price * $ci->quantity;
-            }
-
             $shippingFee = 0.00;
             $zoneId = null;
 
@@ -171,18 +171,30 @@ class CheckoutController extends Controller
                     $shippingFee = (float)$zone->delivery_fee;
                     $zoneId = $zone->id;
                 } else {
-                    $shippingFee = $subtotal > 200 ? 0 : 20;
+                    $shippingFee = 20;
                 }
             } else {
-                $shippingFee = $subtotal > 200 ? 0 : 20;
+                $shippingFee = 20;
             }
 
-            // Loyalty Points Redemption
+            // Calculate Subtotal and Points-Eligible Subtotal
+            $subtotal = 0;
+            $pointsEligibleSubtotal = 0;
+            foreach ($cartItems as $ci) {
+                $price = $ci->item ? $ci->item->effective_price : 0;
+                $lineTotal = $price * $ci->quantity;
+                $subtotal += $lineTotal;
+                if ($ci->item && $ci->item->allows_points !== false) {
+                    $pointsEligibleSubtotal += $lineTotal;
+                }
+            }
+
+            // Loyalty Points Redemption (Capped at 30% of Points-Eligible Items)
             $pointsToRedeem = 0;
             $cashbackDiscount = 0;
             if ($user && $request->filled('redeem_points') && $request->boolean('redeem_points')) {
                 $availablePoints = (int)($user->points_balance ?? 0);
-                $maxRedeemableILS = $subtotal * 0.5;
+                $maxRedeemableILS = $pointsEligibleSubtotal * 0.30; // Max 30% discount!
                 $maxRedeemablePoints = (int)($maxRedeemableILS * 10);
                 $pointsToRedeem = min($availablePoints, $maxRedeemablePoints);
                 if ($pointsToRedeem > 0) {
@@ -191,7 +203,8 @@ class CheckoutController extends Controller
             }
 
             $totalAmount = max(0, $subtotal + $shippingFee - $cashbackDiscount);
-            $pointsEarned = (int)floor($totalAmount / 10);
+            // Points earned only on points-eligible items net amount
+            $pointsEarned = (int)floor(max(0, $pointsEligibleSubtotal - $cashbackDiscount) / 10);
 
             // 4. Create Accounting Sales Invoice
             $invoice = Invoice::create([

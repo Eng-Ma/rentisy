@@ -1990,6 +1990,186 @@ class AccountingTools
         return "تم حذف الطلب رقم #{$orderNumber} بنجاح.";
     }
 
+    #[McpTool(name: 'verify_order_payment_receipt', description: 'Inspect and verify customer payment transfer screenshot proof (بنك فلسطين / جوال باي / بال باي) for an order, and update payment status to paid or unpaid')]
+    public function verifyOrderPaymentReceipt(
+        ?string $orderIdOrNumber = null,
+        ?string $orderIdentifier = null,
+        ?string $order_id = null,
+        ?bool $isVerified = true,
+        ?string $notes = null
+    ): string {
+        $identifier = $orderIdOrNumber ?? ($orderIdentifier ?? ($order_id ?? null));
+        $order = $this->findOrder($identifier);
+
+        if (!$order) {
+            return "Error: Order not found.";
+        }
+
+        $verified = $isVerified ?? true;
+
+        $order->update([
+            'is_payment_verified' => $verified,
+            'payment_status' => $verified ? 'paid' : 'unpaid',
+            'notes' => ($order->notes ? $order->notes . " | " : "") . ($notes ?? ($verified ? 'تم التحقق من إشعار وسكرين شوت الدفع واعتماد السداد من الـ MCP' : 'تم إلغاء اعتماد الدفع')),
+        ]);
+
+        $receiptInfo = $order->payment_receipt_url ? "رابط الإشعار المرفق: {$order->payment_receipt_url}" : "لا يوجد إشعار مرفق.";
+
+        return "تم تحديث حالة التحقق من دفع الطلب #{$order->order_number} بنجاح.\nحالة الدفع: " . ($verified ? 'مدفوع ومؤكد (PAID ✅)' : 'غير مدفوع (UNPAID ⏳)') . "\n{$receiptInfo}";
+    }
+
+    // --- DELIVERY ZONES & CUSTOMER SUGGESTIONS MCP TOOLS ---
+
+    #[McpTool(name: 'get_delivery_zones', description: 'Get a list of all configured delivery zones and their shipping rates (₪) across Palestinian cities with optional city filter')]
+    public function getDeliveryZones(?string $city = null, ?bool $activeOnly = true): string
+    {
+        $query = \App\Models\DeliveryZone::query();
+
+        if ($activeOnly ?? true) {
+            $query->where('is_active', true)->where('is_approved', true);
+        }
+
+        if ($city) {
+            $query->where('city', 'like', "%{$city}%");
+        }
+
+        $zones = $query->orderBy('city')->orderBy('delivery_fee')->get();
+
+        if ($zones->isEmpty()) return "No delivery zones found matching criteria.";
+
+        return "Found {$zones->count()} Delivery Zones:\n" . $zones->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_delivery_zone', description: 'Create a new delivery zone with custom delivery fee (₪), city, and estimated delivery time')]
+    public function createDeliveryZone(
+        string $name,
+        float $deliveryFee,
+        ?string $city = 'غزة',
+        ?string $estimatedTime = 'خلال 24-48 ساعة',
+        ?string $notes = null
+    ): string {
+        $zone = \App\Models\DeliveryZone::create([
+            'name' => $name,
+            'city' => $city ?? 'غزة',
+            'delivery_fee' => $deliveryFee,
+            'estimated_time' => $estimatedTime ?? 'خلال 24-48 ساعة',
+            'is_active' => true,
+            'is_approved' => true,
+            'status' => 'approved',
+            'admin_notes' => $notes,
+        ]);
+
+        return "تمت إضافة منطقة التوصيل الجديدة ({$zone->name}) بسعر توصيل {$zone->delivery_fee} ₪ بنجاح (ID: {$zone->id}).";
+    }
+
+    #[McpTool(name: 'update_delivery_zone', description: 'Update an existing delivery zone (fee, name, city, active status, estimated time) by ID or name')]
+    public function updateDeliveryZone(
+        string|int $zoneIdOrName,
+        ?float $deliveryFee = null,
+        ?string $name = null,
+        ?string $city = null,
+        ?bool $isActive = null,
+        ?string $estimatedTime = null
+    ): string {
+        $zone = \App\Models\DeliveryZone::where('id', $zoneIdOrName)
+            ->orWhere('name', 'like', "%{$zoneIdOrName}%")
+            ->first();
+
+        if (!$zone) {
+            return "Error: Delivery zone '$zoneIdOrName' not found.";
+        }
+
+        if ($deliveryFee !== null) $zone->delivery_fee = $deliveryFee;
+        if ($name !== null) $zone->name = $name;
+        if ($city !== null) $zone->city = $city;
+        if ($isActive !== null) $zone->is_active = $isActive;
+        if ($estimatedTime !== null) $zone->estimated_time = $estimatedTime;
+
+        $zone->save();
+
+        return "تم تحديث بيانات منطقة التوصيل ({$zone->name}) بنجاح. السعر الحالي: {$zone->delivery_fee} ₪ | الحالة: " . ($zone->is_active ? 'مفعلة' : 'معطلة');
+    }
+
+    #[McpTool(name: 'delete_delivery_zone', description: 'Delete a delivery zone by ID or name')]
+    public function deleteDeliveryZone(string|int $zoneIdOrName): string
+    {
+        $zone = \App\Models\DeliveryZone::where('id', $zoneIdOrName)
+            ->orWhere('name', 'like', "%{$zoneIdOrName}%")
+            ->first();
+
+        if (!$zone) {
+            return "Error: Delivery zone '$zoneIdOrName' not found.";
+        }
+
+        $zoneName = $zone->name;
+        $zone->delete();
+
+        return "تم حذف منطقة التوصيل ({$zoneName}) بنجاح.";
+    }
+
+    #[McpTool(name: 'get_suggested_delivery_zones', description: 'List customer suggested delivery zones awaiting admin review and approval')]
+    public function getSuggestedDeliveryZones(?string $status = 'pending'): string
+    {
+        $query = \App\Models\DeliveryZone::with('suggestedByUser');
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $suggestions = $query->latest()->get();
+
+        if ($suggestions->isEmpty()) return "No customer zone suggestions found with status '$status'.";
+
+        return "Found {$suggestions->count()} Zone Suggestions:\n" . $suggestions->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'approve_suggested_delivery_zone', description: 'Approve a customer-suggested delivery zone, set its shipping fee (₪), and activate it for all store shoppers')]
+    public function approveSuggestedDeliveryZone(
+        string|int $zoneIdOrName,
+        float $deliveryFee,
+        ?string $adminNotes = null
+    ): string {
+        $zone = \App\Models\DeliveryZone::where('id', $zoneIdOrName)
+            ->orWhere('name', 'like', "%{$zoneIdOrName}%")
+            ->first();
+
+        if (!$zone) {
+            return "Error: Zone suggestion '$zoneIdOrName' not found.";
+        }
+
+        $zone->update([
+            'delivery_fee' => $deliveryFee,
+            'is_active' => true,
+            'is_approved' => true,
+            'status' => 'approved',
+            'admin_notes' => $adminNotes ?? 'تم الاعتماد والتفعيل عبر الـ MCP AI.',
+        ]);
+
+        return "تم اعتماد وتفعيل منطقة التوصيل المقترحة ({$zone->name}) بنجاح بسعر توصيل {$deliveryFee} ₪.";
+    }
+
+    #[McpTool(name: 'reject_suggested_delivery_zone', description: 'Reject a customer-suggested delivery zone')]
+    public function rejectSuggestedDeliveryZone(
+        string|int $zoneIdOrName,
+        ?string $reason = null
+    ): string {
+        $zone = \App\Models\DeliveryZone::where('id', $zoneIdOrName)
+            ->orWhere('name', 'like', "%{$zoneIdOrName}%")
+            ->first();
+
+        if (!$zone) {
+            return "Error: Zone suggestion '$zoneIdOrName' not found.";
+        }
+
+        $zone->update([
+            'is_active' => false,
+            'status' => 'rejected',
+            'admin_notes' => $reason ?? 'تم رفض الاقتراح.',
+        ]);
+
+        return "تم رفض اقتراح منطقة التوصيل ({$zone->name}).";
+    }
+
     #[McpTool(name: 'analyze_orders_sales', description: 'Comprehensive AI Sales & Ecommerce Performance Analytics (revenue, top products, conversion rates, order status breakdown, city performance)')]
     public function analyzeOrdersSales(?string $period = 'all'): string
     {

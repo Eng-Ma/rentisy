@@ -15,8 +15,24 @@
 4. **Live Social Proof Stream (إشعارات الشراء المباشرة)**:
    - Subtle floating toasts showing real-time anonymized purchases from various Palestinian cities (غزة، رام الله، الخليل، نابلس، بيت لحم، جنين).
 
-## Overview
-The E-commerce Storefront is a full-featured customer-facing online store integrated directly into the Rentisy Accounting ERP system.
+5. **Payment Transfer Screenshot Proof (الدفع عبر إشعار وسكرين شوت التحويل)**:
+   - Supports Palestinian bank transfers (بنك فلسطين) with account and IBAN PS66PALS000000000000001892040 and digital wallets (جوال باي / بال باي).
+   - Shoppers upload their transfer receipt screenshot directly during checkout.
+   - Admin inspects the screenshot proof in the Admin Order details screen (`/orders/{id}`) with lightbox zoom, and confirms/verifies payment with 1 click.
+6. **Delivery vs Pickup Mode & Dynamic Zone Rates (مناطق وأسعار التوصيل المخصصة والاستلام الشخصي)**:
+   - Customers choose between Home Delivery (`delivery`) or In-Store/Warehouse Pickup (`pickup` - 0 ₪).
+   - Custom delivery zones configured per Palestinian city (Gaza, Ramallah, Hebron, Nablus, Jerusalem, Jenin, etc.) with custom fees (₪) and estimated delivery times.
+   - Admin manages zones, adds new ones, edits rates at `/delivery-zones`.
+7. **Customer Suggested Delivery Zones (اقتراح مناطق توصيل جديدة)**:
+   - Customers can propose up to 2 delivery zones if their area is unlisted.
+   - Admin reviews suggestions at `/delivery-zones` tab, approves them, and sets their official delivery fee.
+8. **100% MCP AI Full Control**:
+   - `get_delivery_zones`, `create_delivery_zone`, `update_delivery_zone`, `delete_delivery_zone`
+   - `get_suggested_delivery_zones`, `approve_suggested_delivery_zone`, `reject_suggested_delivery_zone`
+   - `verify_order_payment_receipt`
+
+## Architecture & Routes
+
 
 ## Key Features & Structure
 1. **Storefront Landing Page (`/`)**:

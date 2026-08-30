@@ -74,12 +74,29 @@ class OrderController extends Controller
      */
     public function show($id)
     {
-        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item'])
+        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item', 'deliveryZone'])
             ->findOrFail($id);
 
         return Inertia::render('Orders/Show', [
             'order' => $order,
         ]);
+    }
+
+    /**
+     * Verify payment screenshot proof and mark payment as paid.
+     */
+    public function verifyPayment(Request $request, $id)
+    {
+        $order = Order::findOrFail($id);
+        $isVerified = $request->boolean('is_verified', true);
+
+        $order->update([
+            'is_payment_verified' => $isVerified,
+            'payment_status' => $isVerified ? 'paid' : 'unpaid',
+            'notes' => ($order->notes ? $order->notes . " | " : "") . ($isVerified ? 'تم تأكيد واعتماد إشعار التحويل البنكي من قبل الإدارة' : 'تم إلغاء تأكيد إشعار التحويل'),
+        ]);
+
+        return back()->with('success', $isVerified ? 'تم التحقق من إشعار الدفع وتأكيد سداد الطلب بنجاح.' : 'تم تعديل حالة التحقق من الدفع.');
     }
 
     /**

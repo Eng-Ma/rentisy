@@ -19,7 +19,8 @@ import {
     Users, 
     Building2, 
     LineChart,
-    Bot
+    Bot,
+    MapPin
 } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
 
@@ -44,6 +45,7 @@ const navGroups: NavGroup[] = [
         label: 'المستودعات والمبيعات',
         items: [
             { title: 'طلبات المتجر الإلكتروني', href: '/orders', icon: ShoppingBag },
+            { title: 'مناطق وأسعار التوصيل', href: '/delivery-zones', icon: MapPin },
             { title: 'الأصناف والمخزون', href: '/items', icon: Package },
             { title: 'مناقلات وحركات المخزون', href: '/stock-transfers', icon: ArrowLeftRight },
             { title: 'عروض الأسعار', href: '/quotations', icon: FileSpreadsheet },

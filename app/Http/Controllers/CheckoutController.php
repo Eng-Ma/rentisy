@@ -42,14 +42,25 @@ class CheckoutController extends Controller
             return $ci->item ? $ci->item->effective_price * $ci->quantity : 0;
         });
 
-        $shippingFee = $subtotal > 200 ? 0 : 20;
-        $total = $subtotal + $shippingFee;
+        $deliveryZones = \App\Models\DeliveryZone::where('is_active', true)
+            ->where('is_approved', true)
+            ->orderBy('city')
+            ->orderBy('delivery_fee')
+            ->get();
+
+        $userSuggestionsCount = $user ? \App\Models\DeliveryZone::where('suggested_by_user_id', $user->id)->count() : 0;
+
+        $defaultZone = $deliveryZones->first();
+        $defaultShippingFee = $defaultZone ? $defaultZone->delivery_fee : ($subtotal > 200 ? 0 : 20);
+        $total = $subtotal + $defaultShippingFee;
 
         return Inertia::render('Store/Checkout', [
             'cartItems' => $cartItems,
+            'deliveryZones' => $deliveryZones,
+            'remainingSuggestions' => max(0, 2 - $userSuggestionsCount),
             'summary' => [
                 'subtotal' => round($subtotal, 2),
-                'shippingFee' => round($shippingFee, 2),
+                'shippingFee' => round($defaultShippingFee, 2),
                 'total' => round($total, 2),
                 'itemsCount' => $cartItems->sum('quantity'),
             ],
@@ -59,6 +70,7 @@ class CheckoutController extends Controller
                 'phone' => $user?->phone ?? '',
                 'address' => $user?->address ?? '',
                 'city' => $user?->city ?? 'غزة',
+                'points_balance' => (int)($user?->points_balance ?? 0),
             ],
             'storeContext' => [
                 'cartCount' => (int)$cartItems->sum('quantity'),
@@ -75,7 +87,10 @@ class CheckoutController extends Controller
             'phone' => 'required|string|max:50',
             'address' => 'required|string|max:500',
             'city' => 'nullable|string|max:100',
+            'delivery_type' => 'required|in:delivery,pickup',
+            'delivery_zone_id' => 'nullable|exists:delivery_zones,id',
             'payment_method' => 'required|in:cod,card,bank_transfer',
+            'payment_receipt' => 'nullable|file|image|max:10240',
             'notes' => 'nullable|string|max:1000',
         ]);
 
@@ -89,7 +104,14 @@ class CheckoutController extends Controller
             return redirect()->route('store.shop')->with('error', 'السلة فارغة.');
         }
 
-        return DB::transaction(function () use ($validated, $user, $sessionId, $cartItems) {
+        // Handle Payment Screenshot Upload
+        $receiptUrl = null;
+        if ($request->hasFile('payment_receipt')) {
+            $path = $request->file('payment_receipt')->store('payment_receipts', 'public');
+            $receiptUrl = '/storage/' . $path;
+        }
+
+        return DB::transaction(function () use ($validated, $user, $sessionId, $cartItems, $request, $receiptUrl) {
             // 1. Ensure or link customer Party in accounting system
             $party = null;
             if ($user && $user->party_id) {
@@ -97,7 +119,6 @@ class CheckoutController extends Controller
             }
 
             if (!$party) {
-                // Find Accounts Receivable (1103)
                 $arAccount = Account::where('code', '1103')->orWhere('name', 'like', '%عملاء%')->orWhere('name', 'like', '%الذمم المدينة%')->first();
 
                 $party = Party::create([
@@ -126,20 +147,35 @@ class CheckoutController extends Controller
                 );
             }
 
-            // 3. Calculate order sums & Loyalty Points Discount
+            // 3. Calculate order sums & Delivery Fee based on Zone or Pickup
             $subtotal = 0;
             foreach ($cartItems as $ci) {
                 $price = $ci->item ? $ci->item->effective_price : 0;
                 $subtotal += $price * $ci->quantity;
             }
-            $shippingFee = $subtotal > 200 ? 0 : 20;
+
+            $shippingFee = 0.00;
+            $zoneId = null;
+
+            if ($validated['delivery_type'] === 'pickup') {
+                $shippingFee = 0.00;
+            } elseif (!empty($validated['delivery_zone_id'])) {
+                $zone = \App\Models\DeliveryZone::find($validated['delivery_zone_id']);
+                if ($zone) {
+                    $shippingFee = (float)$zone->delivery_fee;
+                    $zoneId = $zone->id;
+                } else {
+                    $shippingFee = $subtotal > 200 ? 0 : 20;
+                }
+            } else {
+                $shippingFee = $subtotal > 200 ? 0 : 20;
+            }
 
             // Loyalty Points Redemption
             $pointsToRedeem = 0;
             $cashbackDiscount = 0;
             if ($user && $request->filled('redeem_points') && $request->boolean('redeem_points')) {
                 $availablePoints = (int)($user->points_balance ?? 0);
-                // Can redeem up to 50% of subtotal (10 points = 1 ILS)
                 $maxRedeemableILS = $subtotal * 0.5;
                 $maxRedeemablePoints = (int)($maxRedeemableILS * 10);
                 $pointsToRedeem = min($availablePoints, $maxRedeemablePoints);
@@ -149,8 +185,6 @@ class CheckoutController extends Controller
             }
 
             $totalAmount = max(0, $subtotal + $shippingFee - $cashbackDiscount);
-
-            // Calculate new points earned on this purchase (1 point per 10 ILS spent)
             $pointsEarned = (int)floor($totalAmount / 10);
 
             // 4. Create Accounting Sales Invoice
@@ -159,10 +193,10 @@ class CheckoutController extends Controller
                 'date' => now()->toDateString(),
                 'party_id' => $party->id,
                 'store_id' => $store->id,
-                'notes' => 'طلب إلكتروني من المتجر - العميل: ' . $validated['name'] . ($cashbackDiscount > 0 ? " (تم تطبيق خصم كاش باك {$cashbackDiscount} ₪)" : ''),
+                'notes' => 'طلب إلكتروني من المتجر - العميل: ' . $validated['name'] . ($receiptUrl ? ' [تم إرفاق إشعار تحويل بنكي/محفظة]' : ''),
             ]);
 
-            // 5. Create Order
+            // 5. Create Order with Payment Receipt and Delivery Type
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(5));
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -178,10 +212,14 @@ class CheckoutController extends Controller
                 'shipping_fee' => $shippingFee,
                 'total_amount' => $totalAmount,
                 'payment_method' => $validated['payment_method'],
-                'payment_status' => $validated['payment_method'] === 'card' ? 'paid' : 'unpaid',
+                'payment_status' => 'unpaid', // Admin verifies transfer screenshot before setting to paid
+                'payment_receipt_url' => $receiptUrl,
+                'is_payment_verified' => false,
+                'delivery_type' => $validated['delivery_type'],
+                'delivery_zone_id' => $zoneId,
                 'shipping_name' => $validated['name'],
                 'shipping_phone' => $validated['phone'],
-                'shipping_address' => $validated['address'],
+                'shipping_address' => $validated['delivery_type'] === 'pickup' ? 'استلام شخصي من المعرض / المستودع الرئيسي' : $validated['address'],
                 'shipping_city' => $validated['city'] ?? '',
                 'notes' => $validated['notes'] ?? null,
             ]);

@@ -149,7 +149,16 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'updateOrderStatus'])
             ->addTool([$accountingTools, 'updateOrder'])
             ->addTool([$accountingTools, 'deleteOrder'])
-            ->addTool([$accountingTools, 'analyzeOrdersSales']);
+            ->addTool([$accountingTools, 'verifyOrderPaymentReceipt'])
+            ->addTool([$accountingTools, 'analyzeOrdersSales'])
+            // Delivery Zones & Customer Suggestions (إدارة مناطق التوصيل والأسعار والاقتراحات)
+            ->addTool([$accountingTools, 'getDeliveryZones'])
+            ->addTool([$accountingTools, 'createDeliveryZone'])
+            ->addTool([$accountingTools, 'updateDeliveryZone'])
+            ->addTool([$accountingTools, 'deleteDeliveryZone'])
+            ->addTool([$accountingTools, 'getSuggestedDeliveryZones'])
+            ->addTool([$accountingTools, 'approveSuggestedDeliveryZone'])
+            ->addTool([$accountingTools, 'rejectSuggestedDeliveryZone']);
 
         $server = $serverBuilder->build();
 

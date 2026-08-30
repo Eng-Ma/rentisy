@@ -90,6 +90,11 @@ Route::get('/privacy-policy', function () {
 
 use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\DeliveryZoneController;
+use App\Http\Controllers\ZoneSuggestionController;
+
+// Customer Zone Suggestion (Limit 2 per customer)
+Route::post('/api/store/suggest-zone', [ZoneSuggestionController::class, 'store'])->name('store.suggest_zone');
 
 // --- Dedicated Admin Authentication ---
 Route::get('/admin/login', [AdminAuthController::class, 'create'])->name('admin.login');
@@ -100,9 +105,15 @@ Route::post('/admin/logout', [AdminAuthController::class, 'destroy'])->name('adm
 Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Online Store Orders Management
+    // Online Store Orders Management & Payment Verification
     Route::resource('orders', OrderController::class);
     Route::post('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update_status');
+    Route::post('orders/{order}/verify-payment', [OrderController::class, 'verifyPayment'])->name('orders.verify_payment');
+
+    // Delivery Zones & Customer Suggestions Management
+    Route::resource('delivery-zones', DeliveryZoneController::class);
+    Route::post('delivery-zones/{delivery_zone}/approve', [DeliveryZoneController::class, 'approveSuggestion'])->name('delivery-zones.approve');
+    Route::post('delivery-zones/{delivery_zone}/reject', [DeliveryZoneController::class, 'rejectSuggestion'])->name('delivery-zones.reject');
 
     // General Accounting
     Route::resource('accounts', AccountController::class);

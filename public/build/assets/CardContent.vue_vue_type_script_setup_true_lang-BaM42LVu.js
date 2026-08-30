@@ -1,1 +1,0 @@
-import{a as o}from"./Button.vue_vue_type_script_setup_true_lang-Dqve8C8-.js";import{d as n,c as r,o as t,B as c,n as p,u as l}from"./app-sg5oU9Jj.js";const i=n({__name:"CardContent",props:{class:{}},setup(s){const a=s;return(e,m)=>(t(),r("div",{class:p(l(o)("p-6 pt-0",a.class))},[c(e.$slots,"default")],2))}});export{i as _};

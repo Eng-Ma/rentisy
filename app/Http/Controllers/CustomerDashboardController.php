@@ -38,7 +38,7 @@ class CustomerDashboardController extends Controller
         $wishlistCount = WishlistItem::where('user_id', $user->id)->count();
 
         $recentOrders = Order::where('user_id', $user->id)
-            ->with(['items.item', 'invoice'])
+            ->with(['items.item', 'invoice', 'transferMethod'])
             ->latest()
             ->take(5)
             ->get();
@@ -59,7 +59,7 @@ class CustomerDashboardController extends Controller
     public function orders(Request $request)
     {
         $user = Auth::user();
-        $query = Order::where('user_id', $user->id)->with(['items.item', 'invoice']);
+        $query = Order::where('user_id', $user->id)->with(['items.item', 'invoice', 'transferMethod']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -89,7 +89,7 @@ class CustomerDashboardController extends Controller
     {
         $user = Auth::user();
         $order = Order::where('user_id', $user->id)
-            ->with(['items.item', 'invoice.lines.item', 'party'])
+            ->with(['items.item', 'invoice.lines.item', 'party', 'transferMethod'])
             ->findOrFail($id);
 
         return Inertia::render('Customer/OrderShow', [

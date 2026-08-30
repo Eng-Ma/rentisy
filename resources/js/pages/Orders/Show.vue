@@ -44,6 +44,9 @@ interface Order {
     shipping_fee: number
     total_amount: number
     payment_method: string
+    transfer_method_id?: number
+    transfer_method_name?: string
+    transfer_method?: { id: number; name: string; account_name?: string; account_number?: string; iban?: string; phone?: string; logo_url?: string }
     payment_status: string
     payment_receipt_url?: string
     is_payment_verified?: boolean
@@ -158,15 +161,17 @@ const printInvoice = () => {
             <div v-if="order.payment_receipt_url" class="p-6 rounded-3xl bg-white dark:bg-slate-900 border-2 border-indigo-200 dark:border-indigo-900 shadow-sm space-y-4">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
-                        <div class="p-2.5 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                            <Image class="w-6 h-6" />
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 overflow-hidden flex items-center justify-center shrink-0">
+                            <img v-if="order.transfer_method?.logo_url" :src="order.transfer_method.logo_url" :alt="order.transfer_method.name" class="w-full h-full object-cover" />
+                            <Image v-else class="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
                         </div>
                         <div>
-                            <h3 class="text-sm font-bold text-slate-900 dark:text-white">
-                                سكرين شوت إشعار التحويل البنكي / المحفظة المرفق من الزبون
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <span>إشعار وسكرين شوت التحويل:</span>
+                                <span class="text-indigo-600 dark:text-indigo-400">{{ order.transfer_method_name || order.payment_method }}</span>
                             </h3>
                             <p class="text-xs text-slate-500">
-                                طريقة الدفع المختارة: <strong>{{ order.payment_method === 'bank_transfer' ? 'بنك فلسطين' : (order.payment_method === 'card' ? 'محفظة جوال باي / بال باي' : order.payment_method) }}</strong>
+                                الحساب المحول إليه: <strong>{{ order.transfer_method?.account_name || order.transfer_method?.name || order.payment_method }}</strong>
                             </p>
                         </div>
                     </div>

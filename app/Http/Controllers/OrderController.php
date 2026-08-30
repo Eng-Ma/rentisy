@@ -74,7 +74,7 @@ class OrderController extends Controller
      */
     public function show($id)
     {
-        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item', 'deliveryZone'])
+        $order = Order::with(['user', 'party', 'invoice.lines.item', 'items.item', 'deliveryZone', 'transferMethod'])
             ->findOrFail($id);
 
         return Inertia::render('Orders/Show', [

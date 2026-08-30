@@ -172,7 +172,10 @@ const getPaymentMethodLabel = (method: string) => {
 
                         <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500">
                             <span>التاريخ: {{ new Date(order.created_at).toLocaleDateString('ar-EG') }}</span>
-                            <span>طريقة الدفع: {{ getPaymentMethodLabel(order.payment_method) }}</span>
+                            <span class="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
+                                <img v-if="(order as any).transfer_method?.logo_url" :src="(order as any).transfer_method.logo_url" class="w-4 h-4 rounded-md object-cover" />
+                                <span>طريقة التحويل: {{ (order as any).transfer_method_name || getPaymentMethodLabel(order.payment_method) }}</span>
+                            </span>
                             <span>عدد الأصناف: {{ order.items?.length || 0 }}</span>
                         </div>
 

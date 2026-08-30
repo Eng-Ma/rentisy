@@ -5,8 +5,6 @@ import StoreLayout from '@/layouts/StoreLayout.vue'
 import {
     ShieldCheck,
     Truck,
-    CreditCard,
-    Banknote,
     Building2,
     CheckCircle2,
     Lock,
@@ -21,7 +19,9 @@ import {
     Plus,
     X,
     QrCode,
-    Check
+    Check,
+    CreditCard,
+    AlertCircle
 } from 'lucide-vue-next'
 
 interface CartItem {
@@ -43,9 +43,23 @@ interface DeliveryZone {
     estimated_time: string
 }
 
+interface TransferMethod {
+    id: number
+    name: string
+    account_name?: string
+    account_number?: string
+    iban?: string
+    phone?: string
+    instructions?: string
+    logo_url?: string
+    is_active: boolean
+    sort_order: number
+}
+
 interface Props {
     cartItems: CartItem[]
     deliveryZones: DeliveryZone[]
+    transferMethods: TransferMethod[]
     remainingSuggestions: number
     summary: {
         subtotal: number
@@ -78,7 +92,7 @@ const form = useForm({
     city: props.customer.city || 'غزة',
     delivery_type: 'delivery', // delivery, pickup
     delivery_zone_id: props.deliveryZones[0]?.id || null,
-    payment_method: 'bank_transfer', // cod, bank_transfer, jawwal_pay
+    transfer_method_id: props.transferMethods[0]?.id || null,
     payment_receipt: null as File | null,
     redeem_points: false,
     notes: '',
@@ -111,6 +125,10 @@ const onReceiptSelected = (event: Event) => {
 // Dynamic Calculations
 const selectedZone = computed(() => {
     return props.deliveryZones.find(z => z.id === Number(form.delivery_zone_id))
+})
+
+const selectedMethod = computed(() => {
+    return props.transferMethods.find(m => m.id === Number(form.transfer_method_id)) || props.transferMethods[0]
 })
 
 const currentShippingFee = computed(() => {
@@ -177,9 +195,9 @@ const submitSuggestion = async () => {
     <StoreLayout title="إتمام الطلب والدفع | رنتيسي ستور" :storeContext="storeContext">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
             <div class="mb-8">
-                <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">إتمام الطلب والدفع</h1>
+                <h1 class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">إتمام الطلب والتحويل المالي</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                    حدد خيار التوصيل أو الاستلام، وأرفق إشعار التحويل البنكي لتأكيد طلبك وتوليد الفاتورة المحاسبية فوراً
+                    اختر طريقة وحساب التحويل المعتمد، وقم بتحويل المبلغ وأرفق سكرين شوت إشعار التحويل لتأكيد طلبك وتوليد الفاتورة المحاسبية فوراً
                 </p>
             </div>
 
@@ -203,10 +221,10 @@ const submitSuggestion = async () => {
                             <!-- Delivery Option -->
                             <label 
                                 class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-4"
-                                :class="form.delivery_type === 'delivery' ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
+                                :class="form.delivery_type === 'delivery' ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
                             >
                                 <input type="radio" value="delivery" v-model="form.delivery_type" class="text-emerald-600" />
-                                <div class="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
+                                <div class="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl shrink-0">
                                     <Truck class="w-6 h-6" />
                                 </div>
                                 <div class="text-start">
@@ -218,10 +236,10 @@ const submitSuggestion = async () => {
                             <!-- Pickup Option -->
                             <label 
                                 class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-4"
-                                :class="form.delivery_type === 'pickup' ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
+                                :class="form.delivery_type === 'pickup' ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
                             >
                                 <input type="radio" value="pickup" v-model="form.delivery_type" class="text-emerald-600" />
-                                <div class="p-3 bg-indigo-500/10 text-indigo-600 rounded-xl">
+                                <div class="p-3 bg-indigo-500/10 text-indigo-600 rounded-xl shrink-0">
                                     <Store class="w-6 h-6" />
                                 </div>
                                 <div class="text-start">
@@ -308,7 +326,7 @@ const submitSuggestion = async () => {
                             </div>
 
                             <div class="sm:col-span-2">
-                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">ملاحظات إضافية (اختياري)</label>
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">ملاحظات إضافية للتوصيل (اختياري)</label>
                                 <input
                                     type="text"
                                     v-model="form.notes"
@@ -319,99 +337,101 @@ const submitSuggestion = async () => {
                         </div>
                     </div>
 
-                    <!-- STEP 2: Payment Method & Proof Screenshot Upload -->
-                    <div class="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-5">
+                    <!-- STEP 2: Transfer Payment Method (Dynamic Admin Transfer Methods) -->
+                    <div class="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-6">
                         <div class="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
-                            <div class="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
+                            <div class="w-8 h-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs">
                                 2
                             </div>
-                            <h3 class="text-base font-bold text-slate-900 dark:text-white">
-                                طريقة الدفع وإشعار السداد
-                            </h3>
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 dark:text-white">
+                                    طريقة وحساب التحويل المالي (تحويل بنكي / محفظة)
+                                </h3>
+                                <p class="text-[11px] text-slate-500">اختر الحساب المناسب لك وقم بالتحويل ثم ارفع سكرين شوت الإشعار</p>
+                            </div>
                         </div>
 
-                        <!-- Payment Methods Radios -->
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <!-- Bank of Palestine -->
+                        <!-- Dynamic Transfer Methods Cards with Logos -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <label
-                                class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between space-y-3"
-                                :class="form.payment_method === 'bank_transfer' ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
+                                v-for="method in transferMethods"
+                                :key="method.id"
+                                class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative"
+                                :class="form.transfer_method_id === method.id ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/30' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
                             >
-                                <div class="flex items-center justify-between">
-                                    <Building2 class="w-6 h-6 text-indigo-600" />
-                                    <input type="radio" value="bank_transfer" v-model="form.payment_method" class="text-indigo-600" />
+                                <input type="radio" :value="method.id" v-model="form.transfer_method_id" class="text-indigo-600" />
+                                
+                                <div class="w-12 h-12 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+                                    <img v-if="method.logo_url" :src="method.logo_url" :alt="method.name" class="w-full h-full object-cover" />
+                                    <Building2 v-else class="w-6 h-6 text-indigo-500" />
                                 </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">بنك فلسطين (تحويل بنكي)</h4>
-                                    <p class="text-[11px] text-slate-500 mt-1">تطبيق بنك فلسطين / آيبان فوري</p>
-                                </div>
-                            </label>
 
-                            <!-- Digital Wallets (Jawwal Pay / PalPay) -->
-                            <label
-                                class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between space-y-3"
-                                :class="form.payment_method === 'card' ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
-                            >
-                                <div class="flex items-center justify-between">
-                                    <CreditCard class="w-6 h-6 text-purple-600" />
-                                    <input type="radio" value="card" v-model="form.payment_method" class="text-purple-600" />
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">محفظة جوال باي / بال باي</h4>
-                                    <p class="text-[11px] text-slate-500 mt-1">تحويل فوري عبر المحافظ الرقمية</p>
-                                </div>
-                            </label>
-
-                            <!-- COD -->
-                            <label
-                                class="p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between space-y-3"
-                                :class="form.payment_method === 'cod' ? 'border-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/40 ring-2 ring-emerald-500' : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'"
-                            >
-                                <div class="flex items-center justify-between">
-                                    <Banknote class="w-6 h-6 text-emerald-600" />
-                                    <input type="radio" value="cod" v-model="form.payment_method" class="text-emerald-600" />
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">الدفع عند الاستلام (COD)</h4>
-                                    <p class="text-[11px] text-slate-500 mt-1">تسليم المبلغ نقداً عند الاستلام</p>
+                                <div class="text-start flex-1 min-w-0">
+                                    <h4 class="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">{{ method.name }}</h4>
+                                    <p class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{{ method.account_name || 'حساب معتمد' }}</p>
                                 </div>
                             </label>
                         </div>
 
-                        <!-- Bank Details & Proof Upload Section (Shown when bank/wallet is chosen) -->
-                        <div v-if="form.payment_method !== 'cod'" class="p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-900/60 space-y-4">
-                            <!-- Account Info Box -->
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-indigo-200/60 dark:border-indigo-900/60 text-xs">
-                                <div>
-                                    <div class="font-bold text-indigo-950 dark:text-indigo-200">
-                                        {{ form.payment_method === 'bank_transfer' ? 'بيانات حساب بنك فلسطين (Bank of Palestine):' : 'بيانات محفظة جوال باي / بال باي الرقمية:' }}
-                                    </div>
-                                    <div class="mt-1.5 space-y-0.5 font-mono text-slate-700 dark:text-slate-300">
-                                        <p>اسم المستفيد: <strong>شركة رنتيسي للأنظمة والتجارة</strong></p>
-                                        <p v-if="form.payment_method === 'bank_transfer'">رقم الحساب: <strong>1892040</strong> (فرع الرمال - غزة)</p>
-                                        <p v-if="form.payment_method === 'bank_transfer'">الآيبان IBAN: <strong>PS66PALS000000000000001892040</strong></p>
-                                        <p v-else>رقم المحفظة / جوال باي: <strong>0599123456</strong></p>
-                                    </div>
-                                </div>
+                        <span v-if="form.errors.transfer_method_id" class="text-[11px] text-rose-500 block">{{ form.errors.transfer_method_id }}</span>
 
-                                <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-200/60 dark:border-slate-800 text-center shrink-0">
-                                    <QrCode class="w-12 h-12 mx-auto text-indigo-600 mb-1" />
-                                    <span class="text-[10px] text-slate-400 font-bold">مسح الكود للدفع</span>
+                        <!-- Selected Transfer Method Details Box -->
+                        <div v-if="selectedMethod" class="p-6 rounded-2xl bg-gradient-to-br from-indigo-50/80 to-slate-50 dark:from-indigo-950/40 dark:to-slate-900 border-2 border-indigo-200 dark:border-indigo-900 space-y-4">
+                            <div class="flex items-center gap-3 pb-3 border-b border-indigo-200/60 dark:border-indigo-900/60">
+                                <div class="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center shrink-0 shadow-sm">
+                                    <img v-if="selectedMethod.logo_url" :src="selectedMethod.logo_url" class="w-full h-full object-cover" />
+                                    <Building2 v-else class="w-5 h-5 text-indigo-600" />
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-xs text-indigo-950 dark:text-indigo-200">بيانات التحويل لحساب: {{ selectedMethod.name }}</h4>
+                                    <p class="text-[11px] text-slate-500">قم بتحويل المبلغ المطلوب ({{ finalTotal.toFixed(2) }} ₪) إلى البيانات أدناه</p>
                                 </div>
                             </div>
 
-                            <!-- Screenshot Proof Upload Input -->
-                            <div class="space-y-2">
+                            <!-- Account Attributes -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div v-if="selectedMethod.account_name" class="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 space-y-0.5">
+                                    <span class="text-[11px] text-slate-400 font-bold block">اسم المستفيد:</span>
+                                    <strong class="text-slate-900 dark:text-white">{{ selectedMethod.account_name }}</strong>
+                                </div>
+
+                                <div v-if="selectedMethod.account_number" class="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 space-y-0.5">
+                                    <span class="text-[11px] text-slate-400 font-bold block">رقم الحساب / كود التاجر:</span>
+                                    <strong class="text-slate-900 dark:text-white font-mono">{{ selectedMethod.account_number }}</strong>
+                                </div>
+
+                                <div v-if="selectedMethod.iban" class="sm:col-span-2 p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 space-y-0.5">
+                                    <span class="text-[11px] text-slate-400 font-bold block">رقم الآيبان IBAN:</span>
+                                    <strong class="text-indigo-600 dark:text-indigo-400 font-mono break-all">{{ selectedMethod.iban }}</strong>
+                                </div>
+
+                                <div v-if="selectedMethod.phone" class="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-100 dark:border-slate-700 space-y-0.5">
+                                    <span class="text-[11px] text-slate-400 font-bold block">رقم الجوال / المحفظة:</span>
+                                    <strong class="text-slate-900 dark:text-white font-mono">{{ selectedMethod.phone }}</strong>
+                                </div>
+                            </div>
+
+                            <!-- Admin Custom Instructions / Notes Box -->
+                            <div v-if="selectedMethod.instructions" class="p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/60 text-xs text-amber-950 dark:text-amber-200 space-y-1">
+                                <span class="font-bold flex items-center gap-1.5 text-amber-800 dark:text-amber-300">
+                                    <AlertCircle class="w-4 h-4" />
+                                    ملاحظات وتعليمات هامة من الإدارة:
+                                </span>
+                                <p class="leading-relaxed text-[11px]">{{ selectedMethod.instructions }}</p>
+                            </div>
+
+                            <!-- Proof Screenshot Upload Input -->
+                            <div class="space-y-2 pt-2">
                                 <label class="block text-xs font-bold text-indigo-950 dark:text-indigo-200">
-                                    أرفق سكرين شوت إشعار التحويل المالي (صورة الإشعار من التطبيق) *
+                                    أرفق سكرين شوت إشعار التحويل المالي (صورة الإشعار من تطبيق البنك أو المحفظة) *
                                 </label>
                                 
                                 <div class="flex items-center gap-4">
-                                    <label class="flex-1 cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-2xl bg-white dark:bg-slate-900 hover:border-indigo-500 transition">
+                                    <label class="flex-1 cursor-pointer flex flex-col items-center justify-center p-4 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-2xl bg-white dark:bg-slate-800 hover:border-indigo-500 transition">
                                         <Upload class="w-6 h-6 text-indigo-600 mb-1" />
-                                        <span class="text-xs font-bold text-slate-700 dark:text-slate-300">اضغط لرفع صورة الإشعار (PNG, JPG, WEBP)</span>
-                                        <span class="text-[10px] text-slate-400 mt-0.5">سيقوم الأدمن بفحص السكرين شوت وتأكيد الطلب فوراً</span>
-                                        <input type="file" accept="image/*" @change="onReceiptSelected" class="hidden" />
+                                        <span class="text-xs font-bold text-slate-700 dark:text-slate-300">اضغط هنا لرفع صورة الإشعار (PNG, JPG, WEBP)</span>
+                                        <span class="text-[10px] text-slate-400 mt-0.5">سيقوم الأدمن بفحص السكرين شوت ومطابقة الحساب لتأكيد الطلب فوراً</span>
+                                        <input type="file" accept="image/*" @change="onReceiptSelected" class="hidden" required />
                                     </label>
 
                                     <!-- Thumbnail preview if uploaded -->
@@ -420,6 +440,7 @@ const submitSuggestion = async () => {
                                         <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold">تم الرفع ✓</span>
                                     </div>
                                 </div>
+                                <span v-if="form.errors.payment_receipt" class="text-[11px] text-rose-500 block">{{ form.errors.payment_receipt }}</span>
                             </div>
                         </div>
 
@@ -483,6 +504,14 @@ const submitSuggestion = async () => {
                             </div>
 
                             <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                                <span>طريقة التحويل:</span>
+                                <span class="font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                    <img v-if="selectedMethod?.logo_url" :src="selectedMethod.logo_url" class="w-4 h-4 rounded object-cover" />
+                                    <span>{{ selectedMethod?.name || 'تحويل' }}</span>
+                                </span>
+                            </div>
+
+                            <div class="flex items-center justify-between text-slate-600 dark:text-slate-400">
                                 <span>نوع الاستلام / التوصيل:</span>
                                 <span class="font-bold text-slate-900 dark:text-white">
                                     {{ form.delivery_type === 'pickup' ? 'استلام من المعرض (0 ₪)' : (selectedZone?.name || 'توصيل') }}
@@ -512,11 +541,11 @@ const submitSuggestion = async () => {
                         <button
                             type="submit"
                             :disabled="form.processing"
-                            class="w-full py-4 px-6 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/25 transition-all hover:scale-[1.02]"
+                            class="w-full py-4 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/25 transition-all hover:scale-[1.02]"
                         >
                             <LoaderCircle v-if="form.processing" class="w-5 h-5 animate-spin" />
                             <Lock v-else class="w-4 h-4" />
-                            <span>تأكيد الطلب وإرسال الإشعار</span>
+                            <span>تأكيد التحويل وإرسال الإشعار</span>
                         </button>
                     </div>
 
@@ -524,7 +553,7 @@ const submitSuggestion = async () => {
                     <div class="p-5 rounded-3xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 space-y-2">
                         <div class="flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300">
                             <ShieldCheck class="w-4 h-4 text-emerald-500" />
-                            <span>نظام الفحص المحاسبي الآمن</span>
+                            <span>نظام الفحص والتحقق المحاسبي الآمن</span>
                         </div>
                         <p class="leading-relaxed">
                             يقوم النظام بمطابقة إشعار التحويل البنكي وتأكيد الفاتورة المحاسبية وحجز المخزون فوراً من المستودع المركزي.

@@ -22,10 +22,14 @@
      2. **Account Linking & Disconnection in Customer Portal (`/customer/profile`)**: Logged-in users can link or unlink their real Google / Facebook accounts.
    - Configured in `config/services.php` and `.env` with `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`.
 
-5. **Payment Transfer Screenshot Proof (الدفع عبر إشعار وسكرين شوت التحويل)**:
-   - Supports Palestinian bank transfers (بنك فلسطين) with account and IBAN PS66PALS000000000000001892040 and digital wallets (جوال باي / بال باي).
-   - Shoppers upload their transfer receipt screenshot directly during checkout.
-   - Admin inspects the screenshot proof in the Admin Order details screen (`/orders/{id}`) with lightbox zoom, and confirms/verifies payment with 1 click.
+5. **Dynamic Transfer-Only Payment Methods & Logos (الدفع عبر التحويل المالي فقط وشعارات الحسابات)**:
+   - Checkout is strictly **Transfer-Only** (`تحويل مالي فقط مع إشعار سداد`).
+   - Admin manages dynamic transfer methods & accounts at `/transfer-methods` (e.g. Bank of Palestine, Jawwal Pay, PalPay, Merchant Codes, Islamic Bank).
+   - Each method includes: Name, Account Name, Account Number, IBAN, Phone Number, Logo Image/URL, and Custom Instructions/Notes (تظهر في كارد مخصص للمشتري).
+   - Shoppers select the transfer method, see the logo & account details, and upload their transfer receipt screenshot (`payment_receipt`).
+   - Payment logos & method names are displayed across the storefront: Checkout, Customer Orders, and Admin Order Verification.
+   - 100% MCP AI control via `get_payment_transfer_methods`, `create_payment_transfer_method`, `update_payment_transfer_method`, `delete_payment_transfer_method`.
+
 6. **Delivery vs Pickup Mode & Dynamic Zone Rates (مناطق وأسعار التوصيل المخصصة والاستلام الشخصي)**:
    - Customers choose between Home Delivery (`delivery`) or In-Store/Warehouse Pickup (`pickup` - 0 ₪).
    - Custom delivery zones configured per Palestinian city (Gaza, Ramallah, Hebron, Nablus, Jerusalem, Jenin, etc.) with custom fees (₪) and estimated delivery times.

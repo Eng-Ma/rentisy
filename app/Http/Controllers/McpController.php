@@ -158,7 +158,12 @@ class McpController extends Controller
             ->addTool([$accountingTools, 'deleteDeliveryZone'])
             ->addTool([$accountingTools, 'getSuggestedDeliveryZones'])
             ->addTool([$accountingTools, 'approveSuggestedDeliveryZone'])
-            ->addTool([$accountingTools, 'rejectSuggestedDeliveryZone']);
+            ->addTool([$accountingTools, 'rejectSuggestedDeliveryZone'])
+            // Payment Transfer Methods & Accounts (طرق وحسابات التحويل البنكي والمحافظ المعتمدة)
+            ->addTool([$accountingTools, 'getPaymentTransferMethods'])
+            ->addTool([$accountingTools, 'createPaymentTransferMethod'])
+            ->addTool([$accountingTools, 'updatePaymentTransferMethod'])
+            ->addTool([$accountingTools, 'deletePaymentTransferMethod']);
 
         $server = $serverBuilder->build();
 

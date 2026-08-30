@@ -20,6 +20,8 @@ class Order extends Model
         'shipping_fee',
         'total_amount',
         'payment_method',
+        'transfer_method_id',
+        'transfer_method_name',
         'payment_status',
         'payment_receipt_url',
         'is_payment_verified',
@@ -59,6 +61,11 @@ class Order extends Model
     public function deliveryZone()
     {
         return $this->belongsTo(DeliveryZone::class, 'delivery_zone_id');
+    }
+
+    public function transferMethod()
+    {
+        return $this->belongsTo(TransferMethod::class, 'transfer_method_id');
     }
 
     public function items()

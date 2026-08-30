@@ -48,6 +48,8 @@ class CheckoutController extends Controller
             ->orderBy('delivery_fee')
             ->get();
 
+        $transferMethods = \App\Models\TransferMethod::active()->get();
+
         $userSuggestionsCount = $user ? \App\Models\DeliveryZone::where('suggested_by_user_id', $user->id)->count() : 0;
 
         $defaultZone = $deliveryZones->first();
@@ -57,6 +59,7 @@ class CheckoutController extends Controller
         return Inertia::render('Store/Checkout', [
             'cartItems' => $cartItems,
             'deliveryZones' => $deliveryZones,
+            'transferMethods' => $transferMethods,
             'remainingSuggestions' => max(0, 2 - $userSuggestionsCount),
             'summary' => [
                 'subtotal' => round($subtotal, 2),
@@ -89,9 +92,12 @@ class CheckoutController extends Controller
             'city' => 'nullable|string|max:100',
             'delivery_type' => 'required|in:delivery,pickup',
             'delivery_zone_id' => 'nullable|exists:delivery_zones,id',
-            'payment_method' => 'required|in:cod,card,bank_transfer',
-            'payment_receipt' => 'nullable|file|image|max:10240',
+            'transfer_method_id' => 'required|exists:transfer_methods,id',
+            'payment_receipt' => 'required|file|image|max:10240',
             'notes' => 'nullable|string|max:1000',
+        ], [
+            'transfer_method_id.required' => 'يرجى اختيار طريقة وحساب التحويل المالي.',
+            'payment_receipt.required' => 'يرجى إرفاق سكرين شوت أو صورة إشعار التحويل البنكي/المحفظة لتأكيد طلبك.',
         ]);
 
         $user = Auth::user();
@@ -196,7 +202,8 @@ class CheckoutController extends Controller
                 'notes' => 'طلب إلكتروني من المتجر - العميل: ' . $validated['name'] . ($receiptUrl ? ' [تم إرفاق إشعار تحويل بنكي/محفظة]' : ''),
             ]);
 
-            // 5. Create Order with Payment Receipt and Delivery Type
+            // 5. Create Order with Transfer Method and Payment Receipt
+            $transferMethod = \App\Models\TransferMethod::find($validated['transfer_method_id']);
             $orderNumber = 'ORD-' . date('Ymd') . '-' . strtoupper(Str::random(5));
             $order = Order::create([
                 'order_number' => $orderNumber,
@@ -211,7 +218,9 @@ class CheckoutController extends Controller
                 'cashback_discount' => $cashbackDiscount,
                 'shipping_fee' => $shippingFee,
                 'total_amount' => $totalAmount,
-                'payment_method' => $validated['payment_method'],
+                'payment_method' => $transferMethod?->name ?? 'تحويل بنكي / محفظة',
+                'transfer_method_id' => $transferMethod?->id,
+                'transfer_method_name' => $transferMethod?->name,
                 'payment_status' => 'unpaid', // Admin verifies transfer screenshot before setting to paid
                 'payment_receipt_url' => $receiptUrl,
                 'is_payment_verified' => false,

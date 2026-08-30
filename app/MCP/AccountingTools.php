@@ -2170,6 +2170,100 @@ class AccountingTools
         return "تم رفض اقتراح منطقة التوصيل ({$zone->name}).";
     }
 
+    // --- PAYMENT TRANSFER METHODS (طرق وحسابات التحويل البنكي والمحافظ المعتمدة) MCP TOOLS ---
+
+    #[McpTool(name: 'get_payment_transfer_methods', description: 'Get list of all admin-configured transfer payment methods (Bank of Palestine, Jawwal Pay, PalPay, Merchant accounts, IBANs, phone numbers, notes, logos)')]
+    public function getPaymentTransferMethods(?bool $activeOnly = true): string
+    {
+        $query = \App\Models\TransferMethod::query();
+
+        if ($activeOnly ?? true) {
+            $query->where('is_active', true);
+        }
+
+        $methods = $query->orderBy('sort_order')->orderBy('id')->get();
+
+        if ($methods->isEmpty()) return "No transfer payment methods found.";
+
+        return "Found {$methods->count()} Transfer Payment Methods:\n" . $methods->toJson(JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'create_payment_transfer_method', description: 'Create a new transfer payment method (bank account, digital wallet, or merchant transfer) with custom details, IBAN, phone, notes/instructions, and logo URL')]
+    public function createPaymentTransferMethod(
+        string $name,
+        ?string $accountName = null,
+        ?string $accountNumber = null,
+        ?string $iban = null,
+        ?string $phone = null,
+        ?string $instructions = null,
+        ?string $logoUrl = null
+    ): string {
+        $method = \App\Models\TransferMethod::create([
+            'name' => $name,
+            'account_name' => $accountName,
+            'account_number' => $accountNumber,
+            'iban' => $iban,
+            'phone' => $phone,
+            'instructions' => $instructions,
+            'logo_url' => $logoUrl,
+            'is_active' => true,
+            'sort_order' => (\App\Models\TransferMethod::max('sort_order') ?? 0) + 1,
+        ]);
+
+        return "تمت إضافة طريقة التحويل الجديدة ({$method->name}) بنجاح (ID: {$method->id}).";
+    }
+
+    #[McpTool(name: 'update_payment_transfer_method', description: 'Update an existing transfer payment method by ID or name (name, account details, IBAN, phone, custom instructions, logo, active status)')]
+    public function updatePaymentTransferMethod(
+        string|int $methodIdOrName,
+        ?string $name = null,
+        ?string $accountName = null,
+        ?string $accountNumber = null,
+        ?string $iban = null,
+        ?string $phone = null,
+        ?string $instructions = null,
+        ?string $logoUrl = null,
+        ?bool $isActive = null
+    ): string {
+        $method = \App\Models\TransferMethod::where('id', $methodIdOrName)
+            ->orWhere('name', 'like', "%{$methodIdOrName}%")
+            ->first();
+
+        if (!$method) {
+            return "Error: Transfer method '$methodIdOrName' not found.";
+        }
+
+        if ($name !== null) $method->name = $name;
+        if ($accountName !== null) $method->account_name = $accountName;
+        if ($accountNumber !== null) $method->account_number = $accountNumber;
+        if ($iban !== null) $method->iban = $iban;
+        if ($phone !== null) $method->phone = $phone;
+        if ($instructions !== null) $method->instructions = $instructions;
+        if ($logoUrl !== null) $method->logo_url = $logoUrl;
+        if ($isActive !== null) $method->is_active = $isActive;
+
+        $method->save();
+
+        return "تم تحديث بيانات طريقة التحويل ({$method->name}) بنجاح. الحالة: " . ($method->is_active ? 'مفعلة' : 'معطلة');
+    }
+
+    #[McpTool(name: 'delete_payment_transfer_method', description: 'Delete a transfer payment method by ID or name')]
+    public function deletePaymentTransferMethod(string|int $methodIdOrName): string
+    {
+        $method = \App\Models\TransferMethod::where('id', $methodIdOrName)
+            ->orWhere('name', 'like', "%{$methodIdOrName}%")
+            ->first();
+
+        if (!$method) {
+            return "Error: Transfer method '$methodIdOrName' not found.";
+        }
+
+        $methodName = $method->name;
+        $method->delete();
+
+        return "تم حذف طريقة التحويل ({$methodName}) بنجاح.";
+    }
+
     #[McpTool(name: 'analyze_orders_sales', description: 'Comprehensive AI Sales & Ecommerce Performance Analytics (revenue, top products, conversion rates, order status breakdown, city performance)')]
     public function analyzeOrdersSales(?string $period = 'all'): string
     {

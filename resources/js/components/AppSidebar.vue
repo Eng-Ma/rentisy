@@ -45,6 +45,7 @@ const navGroups: NavGroup[] = [
         label: 'المستودعات والمبيعات',
         items: [
             { title: 'طلبات المتجر الإلكتروني', href: '/orders', icon: ShoppingBag },
+            { title: 'طرق وحسابات التحويل', href: '/transfer-methods', icon: CreditCard },
             { title: 'مناطق وأسعار التوصيل', href: '/delivery-zones', icon: MapPin },
             { title: 'الأصناف والمخزون', href: '/items', icon: Package },
             { title: 'مناقلات وحركات المخزون', href: '/stock-transfers', icon: ArrowLeftRight },

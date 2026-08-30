@@ -92,6 +92,7 @@ use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\DeliveryZoneController;
 use App\Http\Controllers\ZoneSuggestionController;
+use App\Http\Controllers\TransferMethodController;
 
 // Customer Zone Suggestion (Limit 2 per customer)
 Route::post('/api/store/suggest-zone', [ZoneSuggestionController::class, 'store'])->name('store.suggest_zone');
@@ -109,6 +110,10 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::resource('orders', OrderController::class);
     Route::post('orders/{order}/status', [OrderController::class, 'updateStatus'])->name('orders.update_status');
     Route::post('orders/{order}/verify-payment', [OrderController::class, 'verifyPayment'])->name('orders.verify_payment');
+
+    // Payment Transfer Methods (طرق وحسابات التحويل البنكي والمحافظ)
+    Route::resource('transfer-methods', TransferMethodController::class);
+    Route::post('transfer-methods/{transfer_method}/toggle', [TransferMethodController::class, 'toggle'])->name('transfer-methods.toggle');
 
     // Delivery Zones & Customer Suggestions Management
     Route::resource('delivery-zones', DeliveryZoneController::class);

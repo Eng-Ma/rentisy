@@ -71,6 +71,11 @@ Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(functi
     Route::post('/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])->name('social.disconnect');
 });
 
+// Privacy Policy (Google Play & Public Legal Policy)
+Route::get('/privacy-policy', function () {
+    return view('privacy-policy');
+})->name('privacy.policy');
+
 use App\Http\Controllers\Auth\AdminAuthController;
 use App\Http\Controllers\OrderController;
 

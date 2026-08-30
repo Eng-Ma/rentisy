@@ -2,18 +2,24 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
 use App\Models\Store;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
 
 class StoreController extends Controller
 {
+    public function index()
+    {
+        $stores = Store::where('is_active', true)->get();
+        return response()->json($stores);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name' => 'required|string',
+            'code' => 'nullable|string',
             'location' => 'nullable|string',
-            'is_active' => 'boolean',
         ]);
 
         $store = Store::create($validated);
@@ -22,6 +28,6 @@ class StoreController extends Controller
             return response()->json($store);
         }
 
-        return redirect()->route('stores.index')->with('success', 'Store created successfully.');
+        return back()->with('success', 'تم إنشاء المستودع بنجاح');
     }
 }

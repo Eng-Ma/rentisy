@@ -20,9 +20,56 @@ use App\Http\Controllers\FixedAssetController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\McpController;
 
-Route::get('/', function () {
-    return Inertia::render('Welcome');
-})->name('home');
+use App\Http\Controllers\StorefrontController;
+use App\Http\Controllers\CartController;
+use App\Http\Controllers\WishlistController;
+use App\Http\Controllers\CheckoutController;
+use App\Http\Controllers\CustomerDashboardController;
+use App\Http\Controllers\Auth\SocialAuthController;
+
+// --- E-Commerce Public Storefront ---
+Route::get('/', [StorefrontController::class, 'index'])->name('home');
+Route::get('/shop', [StorefrontController::class, 'shop'])->name('store.shop');
+Route::get('/shop/product/{id}', [StorefrontController::class, 'product'])->name('store.product');
+Route::get('/shop/category/{id}', function ($id) {
+    return redirect()->route('store.shop', ['category_id' => $id]);
+})->name('store.category');
+
+// --- Shopping Cart ---
+Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+Route::post('/cart/add', [CartController::class, 'store'])->name('cart.add');
+Route::post('/cart/update/{id}', [CartController::class, 'update'])->name('cart.update');
+Route::delete('/cart/remove/{id}', [CartController::class, 'destroy'])->name('cart.remove');
+Route::post('/cart/clear', [CartController::class, 'clear'])->name('cart.clear');
+
+// --- Wishlist / Favorites ---
+Route::get('/wishlist', [WishlistController::class, 'index'])->name('wishlist.index');
+Route::post('/wishlist/toggle', [WishlistController::class, 'toggle'])->name('wishlist.toggle');
+Route::post('/wishlist/move-to-cart/{id}', [WishlistController::class, 'moveToCart'])->name('wishlist.move_to_cart');
+Route::delete('/wishlist/remove/{id}', [WishlistController::class, 'destroy'])->name('wishlist.remove');
+
+// --- Checkout ---
+Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+Route::post('/checkout/process', [CheckoutController::class, 'process'])->name('checkout.process');
+
+// --- Social Authentication (Google & Facebook) ---
+Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])->name('social.redirect');
+Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'])->name('social.callback');
+
+// --- Customer Portal & Dashboard ---
+Route::middleware(['auth'])->prefix('customer')->name('customer.')->group(function () {
+    Route::get('/dashboard', [CustomerDashboardController::class, 'index'])->name('dashboard');
+    Route::get('/orders', [CustomerDashboardController::class, 'orders'])->name('orders');
+    Route::get('/orders/{id}', [CustomerDashboardController::class, 'orderShow'])->name('orders.show');
+    Route::get('/profile', [CustomerDashboardController::class, 'profile'])->name('profile');
+    Route::post('/profile/update', [CustomerDashboardController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/profile/password', [CustomerDashboardController::class, 'updatePassword'])->name('password.update');
+    Route::get('/statement', [CustomerDashboardController::class, 'statement'])->name('statement');
+
+    // Social linking & unlinking in Customer Profile
+    Route::post('/social/{provider}/connect', [SocialAuthController::class, 'connect'])->name('social.connect');
+    Route::post('/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])->name('social.disconnect');
+});
 
 Route::get('/privacy-policy', function () {
     return view('privacy-policy');

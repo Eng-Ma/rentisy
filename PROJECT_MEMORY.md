@@ -46,6 +46,10 @@ A complete enterprise-grade accounting and ERP system inspired by "Al-Aseel Al-D
    - Cost Centers Statement (كشف مراكز التكلفة).
    - Checks Portfolio Status (تقرير الشيكات والإحصائيات).
    - Item Stock Movement & Profitability (حركة الأصناف والمخزون).
+10. **E-Commerce Storefront & Customer Portal (المتجر الإلكتروني وبوابة الزبون)**:
+   - Landing Page (`/`), Catalog (`/shop`), Product Details (`/shop/product/{id}`), Cart (`/cart`), Checkout (`/checkout`), Wishlist (`/wishlist`).
+   - Customer Authentication with Google & Facebook 1-click login and social profile linking/unlinking (`/customer/profile`).
+   - Customer ERP Ledger Statement (`/customer/statement`), Orders tracking (`/customer/orders`), and automated sales invoice generation with store inventory deductions.
 
 ## REST API Endpoints Summary (`/api/...`)
 - `POST /api/login` - Authenticate user & return token

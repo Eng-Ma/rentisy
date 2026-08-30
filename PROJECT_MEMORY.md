@@ -96,5 +96,18 @@ A complete enterprise-grade accounting and ERP system inspired by "Al-Aseel Al-D
   - `cost_centers/`: Cost centers tree & expense/revenue tracking.
   - `parties/`: Customer and vendor management.
   - `reports/`: Complete 8 Al-Aseel financial & stock reports with charts & tables.
-  - `ai_assistant/`: Multi-provider AI Accounting Agent (ChatGPT, Google Gemini, Groq) with per-user custom API key configuration, live model discovery, natural language bookkeeping, and full CRUD, search, filter, and lifecycle actions across all 12 modules (Accounts, Journals, Vouchers, Checks, Invoices, Quotations, Items, Stock Transfers, Parties, Fixed Assets, Cost Centers, and all 8 Reports).
   - `settings/`: Host URL configuration, dark/light theme, user profile.
+
+## Complete MCP Tools Directory (44 Al-Aseel & ERP Tools)
+- **General Queries & System**: `get_accounts`, `get_invoices`, `get_bills`, `get_system_status`, `get_parties`, `getItems`, `getStores`, `getCategories`, `get_dashboard_summary`.
+- **Creation Tools**: `create_customer`, `create_vendor`, `create_item`, `create_store`, `create_category`, `create_invoice`, `create_account`, `create_journal_entry`.
+- **Update & Delete Tools**: `update_party`, `update_item`, `update_store`, `update_category`, `update_account`, `delete_invoice`, `delete_party`, `delete_item`, `delete_store`, `delete_category`, `delete_account`, `delete_journal_entry`.
+- **Vouchers (سندات القبض والصرف)**: `get_vouchers`, `get_voucher`, `create_voucher`, `create_receipt_voucher`, `create_payment_voucher`, `update_voucher`, `delete_voucher`.
+- **Checks Portfolio (حافظة الشيكات)**: `get_checks`, `create_check`, `update_check_status`, `collect_check`, `endorse_check`.
+- **Cost Centers (مراكز التكلفة)**: `get_cost_centers`, `create_cost_center`, `update_cost_center`, `delete_cost_center`.
+- **Stock & Inventory Transfers (المخزون والمناقلات)**: `get_stock_transfers`, `create_stock_transfer`, `create_stock_adjustment`.
+- **Quotations (عروض الأسعار)**: `get_quotations`, `create_quotation`, `convert_quotation_to_invoice`.
+- **Fixed Assets (الأصول الثابتة والإهلاك)**: `get_fixed_assets`, `create_fixed_asset`, `calculate_depreciation`.
+- **Financial Statements & Reports (القوائم المالية والتقارير)**: `get_account_statement`, `get_trial_balance`, `get_income_statement`, `get_party_statement`, `get_stock_movement_report`, `get_aging_report`, `get_cost_centers_report`, `get_checks_report`, `get_inventory_valuation_report`.
+- **E-Commerce Orders & AI Analytics (إدارة وتحليل طلبات المتجر)**: `get_orders`, `get_order_details`, `update_order_status`, `analyze_orders_sales`.
+

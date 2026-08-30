@@ -1876,4 +1876,344 @@ class AccountingTools
 
         return json_encode($analysis, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
+
+    // --- FINANCIAL STATEMENTS & ADVANCED ERP REPORT TOOLS ---
+
+    #[McpTool(name: 'get_account_statement', description: 'Get detailed Account Statement (كشف حساب تفصيلي) for any ledger account with running balance')]
+    public function getAccountStatement(string|int $accountIdOrCode, ?string $fromDate = null, ?string $toDate = null): string
+    {
+        $account = Account::where('id', $accountIdOrCode)->orWhere('code', $accountIdOrCode)->first();
+        if (!$account) {
+            return "Error: Account '$accountIdOrCode' not found.";
+        }
+
+        $query = JournalEntryLine::with('journalEntry')
+            ->where('account_id', $account->id)
+            ->join('journal_entries', 'journal_entry_lines.journal_entry_id', '=', 'journal_entries.id')
+            ->orderBy('journal_entries.date')
+            ->select('journal_entry_lines.*');
+
+        if ($fromDate) $query->where('journal_entries.date', '>=', $fromDate);
+        if ($toDate) $query->where('journal_entries.date', '<=', $toDate);
+
+        $lines = $query->get();
+        $totalDebit = 0;
+        $totalCredit = 0;
+        $balance = 0;
+        $statement = [];
+
+        foreach ($lines as $line) {
+            $totalDebit += (float)$line->debit;
+            $totalCredit += (float)$line->credit;
+
+            if ($account->balance_type === 'debit') {
+                $balance += ($line->debit - $line->credit);
+            } else {
+                $balance += ($line->credit - $line->debit);
+            }
+
+            $statement[] = [
+                'date' => $line->journalEntry?->date,
+                'reference' => $line->journalEntry?->reference,
+                'description' => $line->description ?: $line->journalEntry?->description,
+                'debit' => (float)$line->debit,
+                'credit' => (float)$line->credit,
+                'running_balance' => round($balance, 2),
+            ];
+        }
+
+        $result = [
+            'account' => [
+                'id' => $account->id,
+                'code' => $account->code,
+                'name' => $account->name,
+                'type' => $account->type,
+                'nature' => $account->balance_type,
+            ],
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'summary' => [
+                'total_debit' => round($totalDebit, 2),
+                'total_credit' => round($totalCredit, 2),
+                'final_balance' => round($balance, 2),
+            ],
+            'entries' => $statement,
+        ];
+
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_trial_balance', description: 'Get Trial Balance (ميزان المراجعة بالمجاميع والأرصدة) for all ledger accounts')]
+    public function getTrialBalance(?string $fromDate = null, ?string $toDate = null): string
+    {
+        $accountsQuery = Account::query();
+        $applyFilters = function($q) use ($fromDate, $toDate) {
+            if ($fromDate || $toDate) {
+                $q->whereHas('journalEntry', function($jeQuery) use ($fromDate, $toDate) {
+                    if ($fromDate) $jeQuery->where('date', '>=', $fromDate);
+                    if ($toDate) $jeQuery->where('date', '<=', $toDate);
+                });
+            }
+        };
+
+        $accounts = $accountsQuery->withSum(['journalEntryLines as total_debit' => $applyFilters], 'debit')
+                                  ->withSum(['journalEntryLines as total_credit' => $applyFilters], 'credit')
+                                  ->get();
+
+        $rows = [];
+        $sumDebit = 0;
+        $sumCredit = 0;
+
+        foreach ($accounts as $account) {
+            $debit = (float)($account->total_debit ?? 0);
+            $credit = (float)($account->total_credit ?? 0);
+            $balance = 0;
+            $balanceType = '';
+
+            if ($debit > $credit) {
+                $balance = $debit - $credit;
+                $balanceType = 'debit';
+                $sumDebit += $balance;
+            } elseif ($credit > $debit) {
+                $balance = $credit - $debit;
+                $balanceType = 'credit';
+                $sumCredit += $balance;
+            }
+
+            if ($debit > 0 || $credit > 0) {
+                $rows[] = [
+                    'code' => $account->code,
+                    'name' => $account->name,
+                    'total_debit' => $debit,
+                    'total_credit' => $credit,
+                    'balance' => round($balance, 2),
+                    'balance_type' => $balanceType,
+                ];
+            }
+        }
+
+        $result = [
+            'report' => 'Trial Balance (ميزان المراجعة)',
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'total_debit_balance' => round($sumDebit, 2),
+            'total_credit_balance' => round($sumCredit, 2),
+            'is_balanced' => abs($sumDebit - $sumCredit) < 0.01,
+            'accounts' => $rows,
+        ];
+
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_income_statement', description: 'Get Income Statement (قائمة الدخل - الأرباح والخسائر) with revenue, COGS, expenses, and Net Profit')]
+    public function getIncomeStatement(?string $fromDate = null, ?string $toDate = null): string
+    {
+        $applyFilters = function($q) use ($fromDate, $toDate) {
+            if ($fromDate || $toDate) {
+                $q->whereHas('journalEntry', function($jeQuery) use ($fromDate, $toDate) {
+                    if ($fromDate) $jeQuery->where('date', '>=', $fromDate);
+                    if ($toDate) $jeQuery->where('date', '<=', $toDate);
+                });
+            }
+        };
+
+        $revenues = Account::where('type', 'revenue')
+            ->withSum(['journalEntryLines as total_debit' => $applyFilters], 'debit')
+            ->withSum(['journalEntryLines as total_credit' => $applyFilters], 'credit')
+            ->get();
+
+        $expenses = Account::where('type', 'expense')
+            ->withSum(['journalEntryLines as total_debit' => $applyFilters], 'debit')
+            ->withSum(['journalEntryLines as total_credit' => $applyFilters], 'credit')
+            ->get();
+
+        $totalRevenue = 0;
+        $revenueDetails = [];
+        foreach ($revenues as $rev) {
+            $bal = (float)(($rev->total_credit ?? 0) - ($rev->total_debit ?? 0));
+            if ($bal != 0) {
+                $revenueDetails[] = ['code' => $rev->code, 'name' => $rev->name, 'amount' => round($bal, 2)];
+                $totalRevenue += $bal;
+            }
+        }
+
+        $totalExpense = 0;
+        $expenseDetails = [];
+        foreach ($expenses as $exp) {
+            $bal = (float)(($exp->total_debit ?? 0) - ($exp->total_credit ?? 0));
+            if ($bal != 0) {
+                $expenseDetails[] = ['code' => $exp->code, 'name' => $exp->name, 'amount' => round($bal, 2)];
+                $totalExpense += $bal;
+            }
+        }
+
+        $netIncome = $totalRevenue - $totalExpense;
+
+        $result = [
+            'report' => 'Income Statement (قائمة الدخل)',
+            'period' => ['from' => $fromDate, 'to' => $toDate],
+            'total_revenue' => round($totalRevenue, 2),
+            'total_expenses' => round($totalExpense, 2),
+            'net_profit' => round($netIncome, 2),
+            'profit_status' => $netIncome >= 0 ? 'ربح صافي (Profit)' : 'خسارة (Loss)',
+            'revenue_breakdown' => $revenueDetails,
+            'expense_breakdown' => $expenseDetails,
+        ];
+
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_party_statement', description: 'Get detailed statement for any customer or vendor (كشف حساب عميل أو مورد) with invoices and payments')]
+    public function getPartyStatement(string|int $partyIdOrName, ?string $fromDate = null, ?string $toDate = null): string
+    {
+        $party = Party::with('account')
+            ->where('id', $partyIdOrName)
+            ->orWhere('name', 'like', "%{$partyIdOrName}%")
+            ->first();
+
+        if (!$party) {
+            return "Error: Customer/Vendor '$partyIdOrName' not found.";
+        }
+
+        $balance = 0;
+        if ($party->account_id) {
+            $debit = DB::table('journal_entry_lines')->where('account_id', $party->account_id)->sum('debit');
+            $credit = DB::table('journal_entry_lines')->where('account_id', $party->account_id)->sum('credit');
+            $balance = ($party->type === 'customer') ? ($debit - $credit) : ($credit - $debit);
+        }
+
+        $invoicesQuery = Invoice::where('party_id', $party->id)->with(['lines.item', 'store'])->latest();
+        if ($fromDate) $invoicesQuery->where('date', '>=', $fromDate);
+        if ($toDate) $invoicesQuery->where('date', '<=', $toDate);
+        $invoices = $invoicesQuery->get();
+
+        $vouchersQuery = Voucher::where('party_id', $party->id)->latest();
+        if ($fromDate) $vouchersQuery->where('date', '>=', $fromDate);
+        if ($toDate) $vouchersQuery->where('date', '<=', $toDate);
+        $vouchers = $vouchersQuery->get();
+
+        $result = [
+            'party' => [
+                'id' => $party->id,
+                'name' => $party->name,
+                'type' => $party->type,
+                'phone' => $party->phone,
+                'address' => $party->address,
+                'current_balance' => round((float)$balance, 2),
+                'balance_status' => $balance > 0 ? 'مدين (مستحق عليه)' : ($balance < 0 ? 'دائن (له رصيد)' : 'خالص (0)'),
+            ],
+            'invoices_count' => $invoices->count(),
+            'invoices' => $invoices,
+            'vouchers' => $vouchers,
+        ];
+
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_stock_movement_report', description: 'Get detailed Stock Movement & Card report (حركة صنف ومخزون) for any product')]
+    public function getStockMovementReport(string|int $itemIdOrBarcode, ?string $fromDate = null, ?string $toDate = null): string
+    {
+        $item = Item::with('category')
+            ->where('id', $itemIdOrBarcode)
+            ->orWhere('barcode', $itemIdOrBarcode)
+            ->orWhere('name', 'like', "%{$itemIdOrBarcode}%")
+            ->first();
+
+        if (!$item) {
+            return "Error: Product '$itemIdOrBarcode' not found.";
+        }
+
+        // Purchases (in)
+        $purchases = DB::table('invoice_lines')
+            ->join('invoices', 'invoice_lines.invoice_id', '=', 'invoices.id')
+            ->where('invoice_lines.item_id', $item->id)
+            ->whereIn('invoices.type', ['purchase', 'sale_return'])
+            ->select('invoices.date', 'invoices.type', 'invoices.id as invoice_id', 'invoice_lines.quantity', 'invoice_lines.unit_price')
+            ->get();
+
+        // Sales (out)
+        $sales = DB::table('invoice_lines')
+            ->join('invoices', 'invoice_lines.invoice_id', '=', 'invoices.id')
+            ->where('invoice_lines.item_id', $item->id)
+            ->whereIn('invoices.type', ['sale', 'purchase_return'])
+            ->select('invoices.date', 'invoices.type', 'invoices.id as invoice_id', 'invoice_lines.quantity', 'invoice_lines.unit_price')
+            ->get();
+
+        $totalIn = $purchases->sum('quantity');
+        $totalOut = $sales->sum('quantity');
+        $currentStock = StoreItem::where('item_id', $item->id)->sum('quantity');
+
+        $result = [
+            'item' => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'barcode' => $item->barcode,
+                'category' => $item->category?->name,
+                'purchase_price' => $item->purchase_price,
+                'sales_price' => $item->sales_price,
+                'current_stock_on_hand' => (float)$currentStock,
+            ],
+            'movement_summary' => [
+                'total_quantity_received' => (float)$totalIn,
+                'total_quantity_sold_out' => (float)$totalOut,
+                'net_movement' => (float)($totalIn - $totalOut),
+            ],
+            'recent_inbound_transactions' => $purchases->take(10),
+            'recent_outbound_transactions' => $sales->take(10),
+        ];
+
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    #[McpTool(name: 'get_dashboard_summary', description: 'Get Executive ERP Dashboard Summary with total cash balances, receivables, payables, inventory value, and order metrics')]
+    public function getDashboardSummary(): string
+    {
+        $cashBoxAccount = Account::where('code', '1101')->first();
+        $bankAccount = Account::where('code', '1102')->first();
+        $arAccount = Account::where('code', '1103')->first();
+        $apAccount = Account::where('code', '2101')->first();
+
+        $getBalance = function($acc) {
+            if (!$acc) return 0;
+            $debit = DB::table('journal_entry_lines')->where('account_id', $acc->id)->sum('debit');
+            $credit = DB::table('journal_entry_lines')->where('account_id', $acc->id)->sum('credit');
+            return $acc->balance_type === 'debit' ? ($debit - $credit) : ($credit - $debit);
+        };
+
+        $cashBalance = $getBalance($cashBoxAccount);
+        $bankBalance = $getBalance($bankAccount);
+        $receivables = $getBalance($arAccount);
+        $payables = $getBalance($apAccount);
+
+        $totalStoresValue = 0;
+        foreach (StoreItem::with('item')->get() as $si) {
+            $cost = (float)($si->item ? $si->item->purchase_price : 0);
+            $totalStoresValue += ($si->quantity * $cost);
+        }
+
+        $totalOrders = Order::count();
+        $pendingOrders = Order::where('status', 'pending')->count();
+        $onlineRevenue = Order::where('status', '!=', 'cancelled')->sum('total_amount');
+
+        $summary = [
+            'system_title' => 'Rentisy Accounting ERP Executive Dashboard',
+            'timestamp' => now()->toDateTimeString(),
+            'financial_liquidity' => [
+                'cash_in_hand_ILS' => round((float)$cashBalance, 2),
+                'bank_balance_ILS' => round((float)$bankBalance, 2),
+                'total_available_liquidity_ILS' => round((float)($cashBalance + $bankBalance), 2),
+            ],
+            'debt_position' => [
+                'total_receivables_due_from_customers_ILS' => round((float)$receivables, 2),
+                'total_payables_due_to_suppliers_ILS' => round((float)$payables, 2),
+                'net_debt_position_ILS' => round((float)($receivables - $payables), 2),
+            ],
+            'inventory_asset_valuation_ILS' => round((float)$totalStoresValue, 2),
+            'ecommerce_operations' => [
+                'total_orders' => $totalOrders,
+                'pending_orders_waiting_action' => $pendingOrders,
+                'online_sales_revenue_ILS' => round((float)$onlineRevenue, 2),
+            ],
+        ];
+
+        return json_encode($summary, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
 }

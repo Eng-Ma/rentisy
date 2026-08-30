@@ -1,1 +1,0 @@
-import{a as o}from"./Button.vue_vue_type_script_setup_true_lang-CvzQTra0.js";import{d as r,c as t,o as n,n as c,u as l,A as p}from"./app-gx9cnfPA.js";const d=r({__name:"CardFooter",props:{class:{}},setup(s){const e=s;return(a,m)=>(n(),t("div",{class:c(l(o)("flex items-center p-6 pt-0",e.class))},[p(a.$slots,"default")],2))}});export{d as _};
